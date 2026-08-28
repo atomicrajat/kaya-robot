@@ -1,0 +1,41 @@
+# kaya
+
+ROS 2 Jazzy packages for the Kaya omni-wheel robot (Jetson Orin Nano 8GB, JetPack 7.2.1).
+
+| Package | Purpose |
+|---|---|
+| `kaya_imu` | IMU conditioning. `camera_imu_node` is the production path (Gemini 335L built-in IMU); `imu_node` + `mpu6050.py` drive the external MPU-6050 and are kept only as a fallback. |
+| `kaya_description` | URDF/xacro. Publishes `base_link -> camera_link`; the Orbbec driver supplies the rest of the camera chain. |
+| `kaya_bringup` | Launch composition. |
+
+## Phase 1 (complete)
+
+    ros2 launch kaya_bringup imu.launch.py
+    ros2 service call /imu/rezero_gyro std_srvs/srv/Trigger
+
+`/imu/data_raw` at 203 Hz, bias-corrected, measured covariances, full TF from
+`base_footprint` to `camera_accel_gyro_optical_frame`.
+
+## IMU selection
+
+Measured side by side, stationary:
+
+| | MPU-6050 | Gemini 335L |
+|---|---|---|
+| `\|a\|` error | +50.9 % | -0.2 % |
+| accel noise (worst axis) | 0.042 m/s^2 | 0.0064 m/s^2 |
+| gyro bias | 6.06 deg/s | 0.56 deg/s |
+| drift, uncorrected | 367 deg/min | 38.9 deg/min |
+| drift, after bias removal | - | **0.19 deg/min** |
+
+Neither has a magnetometer. Absolute heading comes from VSLAM loop closure
+(Phase 4), not a compass -- indoor magnetic heading is corrupted by building
+steel and by the robot's own servo magnets.
+
+Camera IMU timestamps are device-generated: inter-stamp jitter 0.004 ms vs
+inter-arrival jitter 4.694 ms. Suitable for VIO.
+
+## TODO before Phase 2
+
+Every dimension in `kaya_description/urdf/kaya.urdf.xacro` is a placeholder.
+Measure chassis radius, wheel radius, and the camera mount offset.

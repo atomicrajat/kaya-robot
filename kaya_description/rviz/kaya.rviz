@@ -1,0 +1,38 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Global Options:
+    Fixed Frame: base_footprint
+    Background Color: 48; 48; 48
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 0.25
+      Plane Cell Count: 20
+    - Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Description Topic:
+        Value: /robot_description
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Marker Scale: 0.3
+      Show Names: true
+    - Class: rviz_default_plugins/Imu
+      Name: Imu
+      Enabled: true
+      Topic:
+        Value: /imu/data_raw
+        Reliability Policy: Reliable
+      Acceleration properties:
+        Acc. vector scale: 0.05
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1.2
+      Focal Point: {X: 0, Y: 0, Z: 0.1}
+      Pitch: 0.4
+      Yaw: 0.8

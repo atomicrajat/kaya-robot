@@ -1,0 +1,115 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kaya">
+
+  <!-- ==================================================================
+       MEASURED CONSTANTS: every one of these is a placeholder until you
+       measure it on the real robot. Phase 2 calibrates the wheel and chassis
+       radii empirically; the camera offset must be measured with a ruler.
+       A 2 cm error in camera_z becomes a permanent 2 cm offset in every map
+       nvblox builds, and no amount of SLAM tuning will remove it.
+       ================================================================== -->
+  <xacro:property name="chassis_radius" value="0.125"/>   <!-- TODO measure -->
+  <xacro:property name="chassis_height" value="0.060"/>   <!-- TODO measure -->
+  <xacro:property name="wheel_radius"   value="0.040"/>   <!-- TODO measure (Phase 2) -->
+  <xacro:property name="wheel_width"    value="0.022"/>   <!-- TODO measure -->
+
+  <!-- base_link origin sits at the wheel axle height, on the chassis centre. -->
+  <xacro:property name="camera_x"  value="0.090"/>        <!-- TODO measure -->
+  <xacro:property name="camera_y"  value="0.000"/>        <!-- TODO measure -->
+  <xacro:property name="camera_z"  value="0.115"/>        <!-- TODO measure -->
+  <xacro:property name="camera_pitch" value="0.0"/>       <!-- TODO measure (radians, + = down) -->
+
+  <material name="grey">  <color rgba="0.35 0.37 0.40 1.0"/></material>
+  <material name="black"> <color rgba="0.10 0.10 0.12 1.0"/></material>
+  <material name="teal">  <color rgba="0.05 0.55 0.62 1.0"/></material>
+
+  <!-- ==================================================================
+       REP-105 frame chain:  map -> odom -> base_footprint -> base_link
+       base_footprint is base_link projected onto the ground plane. Nav2 and
+       the costmaps work in it, so it must exist even though it is massless.
+       ================================================================== -->
+  <link name="base_footprint"/>
+
+  <link name="base_link">
+    <visual>
+      <geometry><cylinder radius="${chassis_radius}" length="${chassis_height}"/></geometry>
+      <material name="grey"/>
+    </visual>
+    <collision>
+      <geometry><cylinder radius="${chassis_radius}" length="${chassis_height}"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="1.5"/>
+      <inertia ixx="0.008" ixy="0" ixz="0" iyy="0.008" iyz="0" izz="0.012"/>
+    </inertial>
+  </link>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/><child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================================================================
+       Three omni wheels at 0, 120, 240 degrees.
+       The joint origin is rotated by theta about Z, which makes the joint's
+       local Y axis tangential to the chassis circle; that is the axle
+       direction for a wheel whose plane contains the radius.
+       ================================================================== -->
+  <xacro:macro name="omni_wheel" params="name theta">
+    <link name="${name}_wheel_link">
+      <visual>
+        <!-- URDF cylinders lie along Z; rotate onto the Y axle. -->
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="0.05"/>
+        <inertia ixx="2e-5" ixy="0" ixz="0" iyy="4e-5" iyz="0" izz="2e-5"/>
+      </inertial>
+    </link>
+    <joint name="${name}_wheel_joint" type="continuous">
+      <parent link="base_link"/><child link="${name}_wheel_link"/>
+      <origin xyz="${chassis_radius*cos(theta)} ${chassis_radius*sin(theta)} 0"
+              rpy="0 0 ${theta}"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:omni_wheel name="wheel_1" theta="0"/>
+  <xacro:omni_wheel name="wheel_2" theta="${2*pi/3}"/>
+  <xacro:omni_wheel name="wheel_3" theta="${4*pi/3}"/>
+
+  <!-- ==================================================================
+       Camera. We publish base_link -> camera_link ONLY.
+       The Orbbec driver already supplies the rest of the chain as
+       /tf_static:  camera_link -> camera_depth_frame -> camera_gyro_frame
+                    -> camera_gyro_optical_frame -> camera_accel_gyro_optical_frame
+       Duplicating any of those here would give TF two parents for one frame,
+       which produces the "TF_MULTIPLE_AUTHORITY" warning and undefined results.
+       ================================================================== -->
+  <link name="camera_link">
+    <visual>
+      <geometry><box size="0.025 0.090 0.025"/></geometry>
+      <material name="teal"/>
+    </visual>
+  </link>
+  <joint name="camera_mount_joint" type="fixed">
+    <parent link="base_link"/><child link="camera_link"/>
+    <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="0 ${camera_pitch} 0"/>
+  </joint>
+
+  <!-- Legacy external MPU-6050. Kept as a documented fallback; not used by the
+       navigation stack (see SETUP_LOG / curriculum notes: the camera's IMU is
+       ~10x better on bias and 6.6x quieter, and is co-located with the imagers). -->
+  <link name="mpu6050_link"/>
+  <joint name="mpu6050_joint" type="fixed">
+    <parent link="base_link"/><child link="mpu6050_link"/>
+    <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>   <!-- TODO measure -->
+  </joint>
+
+</robot>
