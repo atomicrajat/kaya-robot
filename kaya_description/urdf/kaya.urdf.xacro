@@ -8,7 +8,7 @@
 
   <!-- Wheels: 74 mm outer diameter, double-row omni. -->
   <xacro:property name="wheel_radius"   value="0.037"/>   <!-- MEASURED -->
-  <xacro:property name="wheel_width"    value="0.025"/>   <!-- ESTIMATE from photos -->
+  <xacro:property name="wheel_width"    value="0.025"/>   <!-- MEASURED (double row) -->
 
   <!-- Distance from the rotation axis to each wheel's floor contact patch.
        This is the L in the omni kinematics matrix; Phase 2 refines it by
@@ -24,7 +24,9 @@
   <!-- Camera: measured to the module centre, relative to base_link. -->
   <xacro:property name="camera_x" value="0.025"/>         <!-- MEASURED -->
   <xacro:property name="camera_y" value="0.000"/>         <!-- MEASURED -->
-  <xacro:property name="camera_z" value="0.165"/>         <!-- MEASURED (above base_link) -->
+  <!-- Measured 165 mm ABOVE THE FLOOR. base_link sits one wheel radius (37 mm)
+       up, so this value - which is relative to base_link - is 165-37 = 128 mm. -->
+  <xacro:property name="camera_z" value="${0.165 - wheel_radius}"/>  <!-- MEASURED -->
   <!-- URDF rpy pitch is positive NOSE DOWN, so a nose-UP camera is negative.
        -0.0853 rad = 4.89 deg UP, derived from the IMU's gravity vector, which
        agrees with the visual estimate of "about 5 degrees up" to within 0.1 deg. -->
