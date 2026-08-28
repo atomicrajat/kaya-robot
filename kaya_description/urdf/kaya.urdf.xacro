@@ -13,12 +13,17 @@
   <!-- Distance from the rotation axis to each wheel's floor contact patch.
        This is the L in the omni kinematics matrix; Phase 2 refines it by
        spinning the robot a known number of turns. -->
-  <xacro:property name="chassis_radius" value="0.150"/>   <!-- MEASURED -->
+  <!-- Mid-plane of the 25 mm double-row wheel assembly. A staggered double-row
+       omni contacts the floor alternately on each row, so the effective contact
+       plane is the assembly mid-plane, not the outer row's centre.
+       Phase 2 refines this by spinning a known number of turns. -->
+  <xacro:property name="chassis_radius" value="0.143"/>   <!-- MEASURED -->
 
   <!-- Circumscribing radius for collision. The real deck is a truncated
        triangle; a circle that encloses it is the correct conservative
        footprint for Nav2 and is convex, which PhysX wants. -->
-  <xacro:property name="footprint_radius" value="0.160"/> <!-- ESTIMATE -->
+  <!-- 0.143 + half the 25 mm wheel width, plus margin: encloses everything. -->
+  <xacro:property name="footprint_radius" value="0.160"/> <!-- DERIVED -->
   <xacro:property name="chassis_height" value="0.130"/>   <!-- ESTIMATE from photos -->
 
   <!-- Camera: measured to the module centre, relative to base_link. -->
@@ -83,12 +88,13 @@
   <xacro:macro name="omni_wheel" params="name theta">
     <link name="${name}_wheel_link">
       <visual>
-        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <!-- URDF cylinders lie along Z; rotate onto X, the RADIAL axle. -->
+        <origin xyz="0 0 0" rpy="0 ${pi/2} 0"/>
         <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
         <material name="black"/>
       </visual>
       <collision>
-        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <origin xyz="0 0 0" rpy="0 ${pi/2} 0"/>
         <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
       </collision>
       <inertial>
@@ -104,7 +110,13 @@
       <parent link="base_link"/><child link="${name}_wheel_link"/>
       <origin xyz="${chassis_radius*cos(theta)} ${chassis_radius*sin(theta)} 0"
               rpy="0 0 ${theta}"/>
-      <axis xyz="0 1 0"/>
+      <!-- The joint frame is rotated by theta, so its local X is RADIAL and its
+           local Y is TANGENTIAL. The axle is RADIAL (the servo shafts point
+           straight out from the chassis - visible in the photos), which makes
+           the wheel ROLL tangentially. That is what the omni kinematics assume:
+               v_i = -sin(th_i)*vx + cos(th_i)*vy + L*w
+           the (-sin, cos) roll direction is the tangent. Axis must be X. -->
+      <axis xyz="1 0 0"/>
     </joint>
   </xacro:macro>
 
