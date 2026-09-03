@@ -2,72 +2,263 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kaya">
 
   <!-- ==================================================================
-       MEASURED 2026-08-28. Values marked ESTIMATE are still guesses.
+       REGENERATED FROM CAD 2026-08-29 (Fusion 360 parametric model).
        Source of truth: cad/kaya_dimensions.yaml
+
+       MEASURED and trustworthy:
+         wheel geometry, contact radius, wheel angles, camera pose,
+         total mass, servo + camera envelopes (vendor STEP), and the
+         shell profile (35 mm edges, 60 mm ridge, 25 mm ledge at 5 deg).
+
+       DERIVED from measurements (no longer guessed):
+         upper deck height. The camera sits on the 60 mm shell ridge and
+         its centre is measured at 165 mm above the floor, so the deck top
+         is 165 - 29.1/2 - 60 = 90.45 mm. The model then puts the shell
+         ledge at 150.45 mm and the camera underside at 148.26 mm - they
+         meet within 0.2 mm, which is an independent cross-check of the
+         165 mm, the 4.89 deg IMU tilt and the 60 mm/5 deg shell.
+
+       INTERIOR, from the deck photo: Jetson mounted with its PORTS AFT
+       and its own heatsink fan forward, sitting under the front vent
+       panel - so no separate chassis fan exists. Buck converters,
+       terminal block and power switch modelled as envelopes at the rear
+       apex. All four sit on the deck but outside the shell footprint,
+       which is consistent: the shell's long sides are open and the buck
+       converter is visible through that gap in the assembled photos.
+
+       ALSO MEASURED 2026-08-29: shell sheet 2 mm everywhere, top vent
+       patterns, sides open along both long edges. Jetson envelope taken
+       from the wendy.dev OBJ mesh: 90.74 (fore-aft, ports REARWARD)
+       x 103.0 (left-right) x 34.77 mm tall. It FITS, with about 7 mm of
+       headroom at its front edge - but only just, and only in the window
+       x = 4.6 to 17.6 mm. Note the CAD models it as a solid ABS envelope
+       at 344 g against a real devkit's ~250 g.
+
+       STILL ESTIMATED:
+         PLATE THICKNESS is now the dominant one. At the assumed 3 mm the
+         two decks are 521 g and the robot totals +11.6% against the
+         scale (after correcting the servo and Jetson proxies). At 2 mm
+         they are 347 g and the total falls to about +3%. Calipers on the
+         plate edge is the next measurement worth taking.
+         Also: middle deck height,
+         standoff placement, battery and Jetson volumes, coupler and
+         bracket sizes. base_link inertia below is computed from real
+         geometry, but that geometry rests on ~18 estimated numbers.
        ================================================================== -->
 
-  <!-- Wheels: 74 mm outer diameter, double-row omni. -->
   <xacro:property name="wheel_radius"   value="0.037"/>   <!-- MEASURED -->
-  <xacro:property name="wheel_width"    value="0.025"/>   <!-- MEASURED (double row) -->
+  <xacro:property name="wheel_width"    value="0.025"/>   <!-- MEASURED -->
+  <!-- This is L in the omni kinematics (v_i = L*w), which is not quite the
+       same thing as the CAD's geometric contact_radius (143 mm): L is
+       whatever value makes odometry's yaw rate match the chassis' TRUE
+       physical yaw rate, and folds in small compression/slip effects the
+       geometric measurement can't see. Calibrated 2026-09-03 by spinning
+       the robot ~10 turns and comparing odometry's integrated yaw to a
+       visually-counted true rotation - see kaya_dimensions.yaml
+       wheels.kinematic_L_mm for the full derivation. Single rough-precision
+       trial; worth repeating with a precise angle marker before Phase 4. -->
+  <xacro:property name="chassis_radius" value="0.138"/>   <!-- CALIBRATED 2026-09-03, was 0.143 -->
 
-  <!-- Distance from the rotation axis to each wheel's floor contact patch.
-       This is the L in the omni kinematics matrix; Phase 2 refines it by
-       spinning the robot a known number of turns. -->
-  <!-- Mid-plane of the 25 mm double-row wheel assembly. A staggered double-row
-       omni contacts the floor alternately on each row, so the effective contact
-       plane is the assembly mid-plane, not the outer row's centre.
-       Phase 2 refines this by spinning a known number of turns. -->
-  <xacro:property name="chassis_radius" value="0.143"/>   <!-- MEASURED -->
+  <xacro:property name="deck_radius"      value="0.1195"/> <!-- CAD, outline ESTIMATED -->
+  <xacro:property name="footprint_radius" value="0.160"/>  <!-- DERIVED, encloses the wheels -->
 
-  <!-- Circumscribing radius for collision. The real deck is a truncated
-       triangle; a circle that encloses it is the correct conservative
-       footprint for Nav2 and is convex, which PhysX wants. -->
-  <!-- 0.143 + half the 25 mm wheel width, plus margin: encloses everything. -->
-  <xacro:property name="footprint_radius" value="0.160"/> <!-- DERIVED -->
-  <xacro:property name="chassis_height" value="0.130"/>   <!-- ESTIMATE from photos -->
+  <!-- Chassis envelope from CAD: retainer underside 20 mm above the floor
+       to shell ridge 150.45 mm. 130 mm tall, centred 85 mm up, so 48 mm
+       above base_link. -->
+  <xacro:property name="chassis_height" value="0.130"/>
+  <xacro:property name="chassis_z"      value="0.048"/>
 
-  <!-- Camera: measured to the module centre, relative to base_link. -->
-  <xacro:property name="camera_x" value="0.025"/>         <!-- MEASURED -->
+  <xacro:property name="camera_x" value="0.02181"/>       <!-- DERIVED from the shell -->
   <xacro:property name="camera_y" value="0.000"/>         <!-- MEASURED -->
-  <!-- Measured 165 mm ABOVE THE FLOOR. base_link sits one wheel radius (37 mm)
-       up, so this value - which is relative to base_link - is 165-37 = 128 mm. -->
-  <xacro:property name="camera_z" value="${0.165 - wheel_radius}"/>  <!-- MEASURED -->
-  <!-- URDF rpy pitch is positive NOSE DOWN, so a nose-UP camera is negative.
-       -0.0853 rad = 4.89 deg UP, derived from the IMU's gravity vector, which
-       agrees with the visual estimate of "about 5 degrees up" to within 0.1 deg. -->
-  <xacro:property name="camera_pitch" value="-0.0853"/>   <!-- MEASURED (IMU) -->
-  <xacro:property name="camera_roll"  value="-0.0164"/>   <!-- MEASURED (IMU), 0.94 deg -->
+  <xacro:property name="camera_z" value="${0.17372 - wheel_radius}"/>  <!-- DERIVED, see note -->
+  <xacro:property name="camera_pitch" value="-0.0853"/>   <!-- MEASURED (IMU), nose UP -->
+  <xacro:property name="camera_roll"  value="-0.0164"/>   <!-- MEASURED (IMU) -->
 
-  <!-- Mass: 2.088 kg total, measured. The split is an ESTIMATE until the
-       wheels are weighed separately. -->
-  <xacro:property name="total_mass"  value="2.088"/>      <!-- MEASURED -->
-  <xacro:property name="wheel_mass"  value="0.060"/>      <!-- ESTIMATE -->
-  <xacro:property name="base_mass"   value="${total_mass - 3*wheel_mass}"/>
+  <!-- Gemini 335L from Orbbec's STEP. Robot axes: X = depth (optical),
+       Y = the 95 mm stereo baseline, Z = height. -->
+  <xacro:property name="camera_box_x" value="0.0293"/>
+  <xacro:property name="camera_box_y" value="0.1241"/>
+  <xacro:property name="camera_box_z" value="0.0291"/>
+
+  <xacro:property name="total_mass" value="2.088"/>       <!-- MEASURED -->
+  <xacro:property name="wheel_mass" value="0.05845"/>     <!-- CAD-DERIVED -->
+
+  <!-- base_link mass from CAD geometry + real densities.
+       CAD total (base + 3 wheels + camera) = 1.949 kg vs 2.088 measured,
+       6.7% light. The gap is almost entirely the servos: Waveshare's STEP
+       is a SHAPE model with no windings, magnets or steel gear train, and
+       computes to 30.5 g against a realistic 80-95 g for this class.
+       Substituting 85 g servos puts the total at 2.113 kg, +1.2%.
+       Weigh one servo and one wheel to close this out properly. -->
+  <!-- ##################################################################
+       SHELL MATERIAL - RESOLVED. Not magnetic, so aluminium. This also
+       matched what the mass budget predicted independently (see below).
+
+       The shell is 2 mm sheet everywhere (MEASURED), described as
+       "powder coated iron kind of material". At STEEL density that shell
+       is 602 g and base_link alone came to 2.109 kg, heavier than the
+       whole robot weighs on the scale.
+
+       Testing the steel hypothesis properly: credit it the Jetson
+       correction (solid ABS envelope 344 g -> a real devkit's ~250 g)
+       AND halve the battery retainer, and it is still 223 g over. That
+       has to come out of the decks, which would need to be 1.38 mm
+       plate - before any allowance for wiring, fasteners, PCBs,
+       terminal blocks, antennas or the switch. A 1.4 mm plate carrying
+       three servos and a battery pack is not credible.
+
+       The magnet test then confirmed it: NOT MAGNETIC. Aluminium, with
+       powder coat hiding it by eye.
+
+       DECK OUTLINE NOW MEASURED (2026-08-29): equiangular hexagon, three
+       195 mm sides and three 50 mm corner flats. Parent triangle side
+       195 + 2x50 = 295 mm, giving an edge apothem of 85.16 mm and a
+       corner apothem of 127.02 mm. My earlier estimates (75 / 118) were
+       both low, which is why the Jetson and the rear electronics would
+       not previously fit.
+
+       STRUCTURE, corrected 2026-08-29:
+         The three servos hang from the UPPER (triangular) deck on long
+         custom U brackets, 72 mm from the servo underside up to the deck.
+         Each bracket is now ONE body: a saddle web sitting on the servo
+         top face (67.10-70.10) with TWO arms rising to the deck. Verified
+         flush against the case - the three shells run continuously,
+         BOTTOMCASE 63.20-80.00, MIDDLECASE 80.00-96.70, TOPCABINET
+         96.70-110.50, so the arms meet the case at both ends with no gap.
+         The arms land on the servo's FLAT MOUNTING FACES (the ones with
+         the four screw holes), not on the case bounding extremes. Those
+         faces are inboard of the extremes by measured amounts: 5.702 mm
+         on the inner side (the extreme there is the rear cover boss) and
+         1.49 mm on the outer (the extreme there is the output boss).
+         So the arms sit at radius 65.902-68.902 and 109.010-112.010, and
+         the bracket touches the servo on both faces with zero gap and
+         zero interference against any servo body.
+
+         Geometrically: TWO arms per servo, on both faces perpendicular to
+         the shaft (fore and aft along the servo axis), running from the
+         servo MID-HEIGHT (47.00) up to the deck underside (98.00).
+         Stopping at mid-height keeps them clear of the output shaft at
+         37.00 by 10 mm - they clamp the body, never the axis.
+         Bracket width is 20.20 mm, EXACTLY the servo body width. An
+         earlier revision made it 26.20 (body + 3 mm each side); that
+         overhang read as a gap in perspective views even though the arms
+         were flush.
+         All three plates and the base triangle carry 5 mm rounded corners,
+         and every sheet bend is filleted (1.5 inner / 3.5 outer).
+
+       SERVO SHAFT ALIGNMENT: the servos are now positioned by their OUTPUT
+       SHAFT, placed exactly on the wheel axle at 37 mm - which is what
+       matters for rotation. The consequence is that the vendor STEP puts
+       the case underside at 26.90, against your measured 25.00. The 1.90 mm
+       is internal to Waveshare's model (it has 10.1 mm from shaft to case
+       bottom; your measurements imply 12.0). Shaft alignment wins.
+         They do NOT attach to the middle plate. The brackets shipped in
+         Waveshare's STEP are the short standard ones and have been
+         deleted - this robot uses longer custom parts.
+         The middle plate is NOT triangular: it is a 95 x 95 square, the
+         same outline as the battery plate below it, and carries no load
+         from the drive. Four standoffs upper->middle, four middle->bottom,
+         in aligned columns at +/-43 mm.
+
+       LOWER STACK MEASURED 2026-08-29 (floor upward):
+         battery plate 30.00-32.00 (95x95 square, 43x74 slide slot open at
+         the front), 35 mm standoffs, middle plate 67.00-69.00 (95x95
+         square), 28 mm standoffs, upper deck 97.00-99.00.
+       CROSS-CHECK: the servo case runs 25.00-65.20 and the upper deck
+       underside is at 97.00, so the custom bracket spans 72 mm - which is
+       exactly the "long U bracket" on the real robot. The measured servo
+       standoff and the measured plate stack agree without adjustment.
+
+       SHELL PROFILE, fully MEASURED 2026-08-29, above the base triangle
+       (sheet thickness excluded from all of these):
+         front edge 34, rises to 60 at 43 mm back from the front edge,
+         then a 33 mm camera ledge dropping to 55, then down to 30 at the
+         rear edge. Camera front face overhangs 12 mm FORWARD of the ledge.
+       The shell is very nearly flush with the base plate: only 2 mm inside
+       at the FRONT and 4 mm inside at the REAR (both MEASURED), so the
+       outline is derived from the plate rather than a uniform inset.
+       The measured 34/60/55/30 heights are to the sheet UNDERSIDE, so the
+       outer face is 2 mm above each. That makes the ledge outer face at
+       the rear bend 100+55+2 = 157.00 mm - matching the measured 157
+       exactly, which confirms the reading convention.
+       The camera REAR face rests on that rear bend, so camera_x is half a
+       camera depth forward of it: 21.81 mm. (The alternative anchor -
+       front face 12 mm behind the 60 mm bend - is inconsistent by 8.3 mm,
+       because 12 + 29.3 needs a 41.3 mm ledge and it is only 33.)
+       All sheet bends are rounded, not sharp: inner radius 1.5 mm, outer
+       3.5 mm (= inner + thickness), as a folded sheet actually behaves.
+
+       LEDGE ANGLE: 60->55 over 33 mm is 8.62 deg, but the IMU measures the
+       camera at 4.89 deg. A 2.2 mm reading error over 33 mm covers that,
+       and the IMU is far more precise, so the camera pose keeps 4.89.
+
+       *** THE 8.55 mm CONFLICT IS RESOLVED ***
+       Floor to the top of the base triangle MEASURED at 100.00 mm. The
+       lower plate chain (30+2+35+2+28+2) independently predicts 99.00 -
+       agreement to 1 mm. The early direct camera reading of 165 mm was
+       simply wrong and is discarded. upper_deck_top_above_floor is now
+       the measured 100.00, and every height above it follows from the
+       measured shell profile.
+
+       2026-08-29, further MEASURED: plate thickness 2 mm (same stock as the
+       shell), servo underside 25 mm above the floor with NO bottom bracket
+       (they hang from long CUSTOM brackets off the UPPER deck; both
+       Waveshare stock brackets, FK-US-001 and FK-US-002, were deleted as
+       they do not match this build), and the
+       shell is closed at the FRONT and the REAR, and fully open along both
+       long sides - no side walls at all.
+       MPU-6050 removed, not in use.
+
+       CROSS-CHECK: the corner flat lands at radius 127.0 mm and the wheel
+       assembly inner face at 130.5 mm - a 3.5 mm running clearance, which
+       falls out of three independently measured numbers (contact radius
+       143, wheel width 25, plate 195/50).
+       ################################################################## -->
+
+  <!-- base_link mass is SCALED so the four rigid bodies sum to the measured
+       2.088 kg. The CAD geometry gives 1.5426 kg; multiplying by 1.1336 gets
+       the total right while KEEPING the CAD's mass DISTRIBUTION, which is
+       what the inertia tensor actually encodes. The inertia below is scaled
+       by the same factor. This is why you do NOT need to weigh individual
+       parts: one total plus the CAD distribution is enough for PhysX. -->
+  <xacro:property name="base_mass"  value="1.74864"/>     <!-- = 2.088 - 3*wheel - camera -->
+  <xacro:property name="base_com_z" value="0.05225"/>     <!-- 89.3 mm above the floor -->
+
+  <!-- base_link inertia about its own COM, base_link axes.
+       ixz is genuinely non-zero: the shell slopes down toward the rear, so
+       the chassis is not fore-aft symmetric. ixy and iyz are ~1e-18 and
+       dropped. The old solid-cylinder placeholder overstated izz by 3.5x,
+       which for a holonomic base is the term that dominates yaw response. -->
+  <xacro:property name="base_ixx" value="6.3734e-03"/>
+  <xacro:property name="base_iyy" value="6.9574e-03"/>
+  <xacro:property name="base_izz" value="8.2123e-03"/>
+  <xacro:property name="base_ixz" value="-1.968e-04"/>
+
+  <xacro:property name="wheel_ixx" value="3.7095e-05"/>   <!-- polar, spin axis -->
+  <xacro:property name="wheel_iyy" value="2.2594e-05"/>   <!-- transverse -->
+  <xacro:property name="wheel_izz" value="2.2594e-05"/>   <!-- transverse -->
 
   <material name="grey">  <color rgba="0.28 0.29 0.31 1.0"/></material>
   <material name="black"> <color rgba="0.10 0.10 0.12 1.0"/></material>
   <material name="teal">  <color rgba="0.05 0.55 0.62 1.0"/></material>
 
-  <!-- REP-105: map -> odom -> base_footprint -> base_link -->
   <link name="base_footprint"/>
 
   <link name="base_link">
     <visual>
-      <geometry><cylinder radius="${footprint_radius}" length="${chassis_height}"/></geometry>
+      <origin xyz="0 0 ${chassis_z}" rpy="0 0 0"/>
+      <geometry><cylinder radius="${deck_radius}" length="${chassis_height}"/></geometry>
       <material name="grey"/>
     </visual>
     <collision>
-      <geometry><cylinder radius="${footprint_radius}" length="${chassis_height}"/></geometry>
+      <origin xyz="0 0 ${chassis_z}" rpy="0 0 0"/>
+      <geometry><cylinder radius="${deck_radius}" length="${chassis_height}"/></geometry>
     </collision>
     <inertial>
+      <origin xyz="0 0 ${base_com_z}" rpy="0 0 0"/>
       <mass value="${base_mass}"/>
-      <!-- Solid-cylinder approximation. Replaced by Fusion's computed tensor
-           once the CAD model exists; that is the main reason to build it. -->
-      <inertia
-        ixx="${base_mass*(3*footprint_radius*footprint_radius + chassis_height*chassis_height)/12}"
-        iyy="${base_mass*(3*footprint_radius*footprint_radius + chassis_height*chassis_height)/12}"
-        izz="${base_mass*footprint_radius*footprint_radius/2}"
-        ixy="0" ixz="0" iyz="0"/>
+      <inertia ixx="${base_ixx}" iyy="${base_iyy}" izz="${base_izz}"
+               ixy="0" ixz="${base_ixz}" iyz="0"/>
     </inertial>
   </link>
 
@@ -76,64 +267,95 @@
     <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
   </joint>
 
-  <!-- ==================================================================
-       Wheel layout, confirmed from photos: TWO WHEELS FORWARD flanking the
-       camera, ONE WHEEL AT THE REAR. So the angles from +X are 60, 180, 300
-       degrees, NOT 0/120/240.
+  <!-- TWO WHEELS FORWARD flanking the camera, ONE AT THE REAR: 60/180/300.
 
-       WARNING - which SERVO ID sits at which angle is NOT yet verified.
-       The names below are provisional. Confirm before writing the Phase 2
-       kinematics, or the robot will strafe when told to rotate.
-       ================================================================== -->
+       SERVO ID -> ANGLE: RESOLVED 2026-09-03 by pulsing each servo
+       individually in wheel mode (low speed, ~35 deg, robot on the floor)
+       and watching which physical wheel turned and which way:
+         servo 1 -> front-right -> theta = 300 deg (top moved toward front)
+         servo 2 -> front-left  -> theta =  60 deg (top moved toward back)
+         servo 3 -> rear        -> theta = 180 deg (top moved toward robot's right)
+       Every servo's positive Goal Speed matched the standard kinematic sign
+       convention (v_i = -sin(th_i)*vx + cos(th_i)*vy + L*w) directly - no
+       per-wheel flip needed. See kaya_dimensions.yaml servo_wheel_map and
+       ~/wheel_probe.py on the robot.
+
+       CAD JOINT SIGN caveat (see the old warning this replaces): the note
+       about Fusion's as-built joints spinning anti-parallel to axis="1 0 0"
+       is about the CAD's OWN joint definitions if this file is ever
+       regenerated straight from CAD joint transforms. It does not apply to
+       the hand-verified wheel_N -> theta assignment below, which is the
+       real, tested value - axis="1 0 0" with these thetas is what actually
+       drove the robot correctly (forward, rotate, and strafe all verified
+       against odometry and visual observation, 2026-09-03). If a future
+       regeneration flips this, re-verify with wheel_probe.py rather than
+       trusting the CAD sign blindly.
+
+       The CAD now carries 3 wheel joints plus 36 roller joints (12 per
+       wheel, each about its own tangential axis). The rollers are there
+       for visual and kinematic sanity only - the URDF and Isaac still
+       simulate each wheel as ONE cylinder with anisotropic friction. -->
+  <!-- MESHES: exported from Fusion in the BASE_LINK frame, so a wheel mesh
+       carries its assembled position. The compensating visual origin below
+       undoes the joint transform exactly:
+           xyz = -chassis_radius on local X,  rpy = 0 0 -theta
+       Swap the cylinder for the mesh line when you wire up Isaac.
+       NOTE: wheel_N's theta below was reassigned 2026-09-03 (see the servo
+       mapping note above) to match the real servo IDs. The cylinder used
+       today is rotationally symmetric so this is a no-op visually, but if
+       wheel_N.obj was exported from a Fusion component that assumed the OLD
+       theta, its baked-in roller orientation may no longer match - purely
+       cosmetic (collision/kinematics stay correct either way), but check
+       before wiring the mesh line up for Isaac Sim. -->
   <xacro:macro name="omni_wheel" params="name theta">
     <link name="${name}_wheel_link">
       <visual>
-        <!-- URDF cylinders lie along Z; rotate onto X, the RADIAL axle. -->
         <origin xyz="0 0 0" rpy="0 ${pi/2} 0"/>
         <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <!-- mesh alternative:
+        <origin xyz="${-chassis_radius} 0 0" rpy="0 0 ${-theta}"/>
+        <geometry><mesh filename="package://kaya_description/meshes/${name}.obj"/></geometry>
+        -->
         <material name="black"/>
       </visual>
       <collision>
+        <!-- Keep this a CYLINDER even after the roller mesh is exported.
+             Omni behaviour comes from anisotropic friction, not from
+             simulating twelve free rollers. -->
         <origin xyz="0 0 0" rpy="0 ${pi/2} 0"/>
         <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
       </collision>
       <inertial>
         <mass value="${wheel_mass}"/>
-        <inertia
-          ixx="${wheel_mass*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)/12}"
-          iyy="${wheel_mass*wheel_radius*wheel_radius/2}"
-          izz="${wheel_mass*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)/12}"
-          ixy="0" ixz="0" iyz="0"/>
+        <!-- FIXED: the pre-CAD revision put the polar moment on iyy while
+             declaring the spin axis as X. -->
+        <inertia ixx="${wheel_ixx}" iyy="${wheel_iyy}" izz="${wheel_izz}"
+                 ixy="0" ixz="0" iyz="0"/>
       </inertial>
     </link>
     <joint name="${name}_wheel_joint" type="continuous">
       <parent link="base_link"/><child link="${name}_wheel_link"/>
       <origin xyz="${chassis_radius*cos(theta)} ${chassis_radius*sin(theta)} 0"
               rpy="0 0 ${theta}"/>
-      <!-- The joint frame is rotated by theta, so its local X is RADIAL and its
-           local Y is TANGENTIAL. The axle is RADIAL (the servo shafts point
-           straight out from the chassis - visible in the photos), which makes
-           the wheel ROLL tangentially. That is what the omni kinematics assume:
-               v_i = -sin(th_i)*vx + cos(th_i)*vy + L*w
-           the (-sin, cos) roll direction is the tangent. Axis must be X. -->
       <axis xyz="1 0 0"/>
     </joint>
   </xacro:macro>
 
-  <xacro:omni_wheel name="wheel_1" theta="${pi/3}"/>      <!-- 60 deg, front-left -->
-  <xacro:omni_wheel name="wheel_2" theta="${pi}"/>        <!-- 180 deg, rear -->
-  <xacro:omni_wheel name="wheel_3" theta="${5*pi/3}"/>    <!-- 300 deg, front-right -->
+  <xacro:omni_wheel name="wheel_1" theta="${5*pi/3}"/>    <!-- 300 deg, front-right, servo id 1 -->
+  <xacro:omni_wheel name="wheel_2" theta="${pi/3}"/>      <!-- 60 deg, front-left, servo id 2 -->
+  <xacro:omni_wheel name="wheel_3" theta="${pi}"/>        <!-- 180 deg, rear, servo id 3 -->
 
-  <!-- ==================================================================
-       Camera. We publish base_link -> camera_link ONLY; the Orbbec driver
-       supplies the rest of the chain on /tf_static. Duplicating any of it
-       would give TF two parents for one frame.
-       ================================================================== -->
+  <!-- We publish base_link -> camera_link ONLY; the Orbbec driver supplies
+       the rest of the chain on /tf_static. The 164 g camera has no inertial
+       block, so its mass is carried implicitly by base_link. -->
   <link name="camera_link">
     <visual>
-      <geometry><box size="0.025 0.150 0.030"/></geometry>
+      <geometry><box size="${camera_box_x} ${camera_box_y} ${camera_box_z}"/></geometry>
       <material name="teal"/>
     </visual>
+    <collision>
+      <geometry><box size="${camera_box_x} ${camera_box_y} ${camera_box_z}"/></geometry>
+    </collision>
   </link>
   <joint name="camera_mount_joint" type="fixed">
     <parent link="base_link"/><child link="camera_link"/>
@@ -141,12 +363,5 @@
             rpy="${camera_roll} ${camera_pitch} 0"/>
   </joint>
 
-  <!-- Legacy external MPU-6050: kept as a documented fallback, not used by the
-       navigation stack. Position still unmeasured. -->
-  <link name="mpu6050_link"/>
-  <joint name="mpu6050_joint" type="fixed">
-    <parent link="base_link"/><child link="mpu6050_link"/>
-    <origin xyz="0 0 0.03" rpy="0 0 0"/>   <!-- TODO measure -->
-  </joint>
 
 </robot>

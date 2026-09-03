@@ -9,7 +9,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -38,6 +38,11 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz', default_value='false'),
         DeclareLaunchArgument('auto_bias', default_value='true',
                               description='Estimate gyro bias at startup (robot must be still)'),
+        DeclareLaunchArgument('real_joint_states', default_value='false',
+                              description='Set true when kaya_drive drive_node is also running: '
+                                          'it publishes real encoder-derived /joint_states, so the '
+                                          'zero-filling placeholder below must not also publish '
+                                          'there or the two fight over the same topic.'),
 
         # ------------------------------------------------ 1. the camera driver
         # Including another package's launch file rather than re-declaring its
@@ -76,11 +81,12 @@ def generate_launch_description():
         ),
 
         # The three wheel joints are `continuous`, so TF needs their angles.
-        # Until the Phase 2 driver publishes real encoder positions, this
-        # supplies zeros so the tree is complete.
+        # Until kaya_drive's drive_node is running, this supplies zeros so the
+        # tree is complete. Disabled via real_joint_states when it is.
         Node(
             package='joint_state_publisher', executable='joint_state_publisher',
             name='joint_state_publisher', output='log',
+            condition=UnlessCondition(LaunchConfiguration('real_joint_states')),
         ),
 
         # ------------------------------------------------------------ 4. RViz
