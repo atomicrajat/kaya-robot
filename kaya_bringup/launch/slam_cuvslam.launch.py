@@ -58,6 +58,12 @@ def generate_launch_description():
                                           'clock, which is what VIO requires.'),
         DeclareLaunchArgument('enable_drive', default_value='true',
                               description='Bring up kaya_drive so the robot can be teleoperated.'),
+        DeclareLaunchArgument('depth_for_nvblox', default_value='false',
+                              description='cuVSLAM itself needs only the stereo IR pair, so depth '
+                                          'and colour are off by default to save USB bandwidth and '
+                                          'GPU memory. Phase 5 sets this true because nvblox fuses '
+                                          'DEPTH -- without it nvblox has nothing to build a '
+                                          'costmap from. See nav.launch.py.'),
         DeclareLaunchArgument('publish_odom_tf', default_value='true',
                               description='Let cuVSLAM own odom -> base_link. See the TF '
                                           'ownership note below before changing.'),
@@ -76,8 +82,9 @@ def generate_launch_description():
                 # Colour and depth are not used by this route. Leaving them off
                 # keeps USB bandwidth and GPU memory for SLAM, which matters on
                 # an 8 GB board (curriculum Sec. 03).
-                'enable_color': 'false',
-                'enable_depth': 'false',
+                'enable_color': LaunchConfiguration('depth_for_nvblox'),
+                'enable_depth': LaunchConfiguration('depth_for_nvblox'),
+                'depth_registration': LaunchConfiguration('depth_for_nvblox'),
                 'enable_accel': 'true',
                 'enable_gyro': 'true',
                 'enable_sync_output_accel_gyro': 'true',

@@ -1,0 +1,57 @@
+### Phase 5: nvblox -- the LiDAR replacement.
+#
+# Fuses the depth camera into a TSDF, converts that to an ESDF
+# (distance-to-nearest-obstacle, which is exactly what a planner wants), and
+# publishes a 2D slice of it for Nav2's costmap. Kaya has no LiDAR, so this
+# is where every obstacle in the costmap comes from.
+#
+# THE HEIGHTS BELOW ARE THE POINT OF THIS FILE. nvblox defaults to slicing
+# 0.0-1.0 m and reporting at 1.0 m, which suits a robot far taller than this
+# one. Kaya stands about 0.19 m to the top of the camera. Left at the
+# defaults it would look for obstacles at 1 m -- sailing straight into chair
+# legs and boxes while flagging tabletops it could drive under.
+#
+# Measured geometry it is derived from (kaya.urdf.xacro):
+#   wheel_radius      0.037   base_link sits this far above the floor
+#   footprint_radius  0.160   circle enclosing the truncated-triangle deck
+#   camera            0.1737 above the FLOOR, pitched 4.89 deg NOSE UP
+#
+# The camera's upward pitch matters here: it sees further across the room but
+# less of the floor immediately ahead, so the near-field blind spot is real.
+# Do not lower esdf_slice_min_height to chase it -- that admits floor noise
+# as phantom obstacles, which is the failure the curriculum warns about.
+
+/**:
+  ros__parameters:
+    # 5 cm. For a base 0.32 m across this resolves a doorway and a chair leg
+    # while staying affordable: voxel memory scales cubically, and on 8 GB
+    # shared with cuVSLAM there is no headroom to be casual. Drop to 0.04 only
+    # if genuinely needed, and watch RAM when you do.
+    voxel_size: 0.05
+
+    # static_tsdf: one rigid world. dynamic/occupancy modes cost more and buy
+    # nothing until Phase 7-8 wants moving-object handling.
+    mapping_type: static_tsdf
+    esdf_mode: 2d
+
+    static_mapper:
+      # Floor to just over the robot's own height. Anything in this band is
+      # something Kaya would actually hit.
+      #   min 0.05  above the floor plane, so floor noise and the camera's own
+      #             tilt-induced ground return are not marked as obstacles
+      #   max 0.20  a little above the 0.19 m camera top, so overhangs that
+      #             would clip the camera still count
+      esdf_slice_min_height: 0.05
+      esdf_slice_max_height: 0.20
+      # Where the published 2D slice is reported. Mid-body: high enough to
+      # miss floor speckle, low enough to catch low obstacles.
+      esdf_slice_height: 0.10
+
+      # Depth beyond this is not integrated. The Gemini 335L's stereo error
+      # grows with distance squared -- our Phase 4 loop-closure work already
+      # showed 3-4 m is where it gets noisy -- and integrating far, wrong
+      # depth smears the TSDF. 3 m keeps what is trustworthy.
+      projective_integrator_max_integration_distance_m: 3.0
+      esdf_integrator_max_distance_m: 2.0
+
+    publish_esdf_distance_slice: true
