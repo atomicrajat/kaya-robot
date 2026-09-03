@@ -73,6 +73,25 @@ def generate_launch_description():
     # range rather than loosening the test arbitrarily.
     inlier_distance = LaunchConfiguration('inlier_distance')
 
+    # Feature type, for BOTH the bag-of-words loop detector
+    # (Kp/DetectorStrategy) and the geometric verification that follows
+    # (Vis/FeatureType). They are separate parameters and are set together
+    # here on purpose -- detecting a revisit with one descriptor and then
+    # verifying it with another wastes the detection.
+    #
+    # RTAB-Map defaults both to 8 = GFTT/ORB. ORB's binary descriptors are
+    # fast but noticeably less robust to viewpoint and illumination change
+    # than SIFT -- and loop closure is exactly the viewpoint-change case:
+    # the same place seen later, from a slightly different pose, under
+    # whatever the lighting is by then. 1 = SIFT.
+    #
+    # The usual objection to SIFT is cost, which does not apply here:
+    # Rtabmap/DetectionRate is 1 Hz, so this runs once a second, not per
+    # frame. Measured feature supply is not the constraint either -- ~970
+    # keypoints/frame either way; what we are short of is MATCHES that
+    # survive geometric verification (34-113 raw matches, 0-13 inliers).
+    feature_type = LaunchConfiguration('feature_type')
+
     return LaunchDescription([
         DeclareLaunchArgument('delete_db', default_value='false',
                               description='Start a fresh map instead of continuing '
@@ -81,6 +100,10 @@ def generate_launch_description():
                               description='RTAB-Map\'s own Qt viz UI -- needs a display; '
                                           'off by default on a headless robot.'),
         DeclareLaunchArgument('rviz', default_value='false'),
+        DeclareLaunchArgument('feature_type', default_value='1',
+                              description='Kp/DetectorStrategy and Vis/FeatureType. '
+                                          '1=SIFT (default here), 8=GFTT/ORB (RTAB-Map\'s own '
+                                          'default) -- see the note above.'),
         DeclareLaunchArgument('inlier_distance', default_value='0.15',
                               description='Vis/InlierDistance (m) -- see the note above; '
                                           'RTAB-Map\'s 0.1 default assumes better depth '
@@ -155,7 +178,9 @@ def generate_launch_description():
                 'publish_tf_map': 'true',     # RTAB-Map publishes map -> odom
 
                 'args': [delete_db_flag, ' --Vis/MinInliers ', min_inliers,
-                         ' --Vis/InlierDistance ', inlier_distance],
+                         ' --Vis/InlierDistance ', inlier_distance,
+                         ' --Kp/DetectorStrategy ', feature_type,
+                         ' --Vis/FeatureType ', feature_type],
 
                 'rtabmap_viz': LaunchConfiguration('rtabmap_viz'),
                 'rviz': LaunchConfiguration('rviz'),

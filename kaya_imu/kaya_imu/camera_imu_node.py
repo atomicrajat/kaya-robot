@@ -18,6 +18,7 @@ you end up with two sources of truth for the same transform.
 
 import math
 import os
+import time
 import statistics
 import threading
 
@@ -45,6 +46,17 @@ class CameraImuNode(Node):
         self.declare_parameter('auto_bias_on_start', True)
         self.declare_parameter('bias_samples', 600)          # ~3 s at 203 Hz
         self.declare_parameter('still_gyro_range_max', 0.02)  # rad/s peak-to-peak
+        # Gyro bias is NOT constant: it walks as the sensor warms. Measured on
+        # this camera, startup vs ~30 min later, the optical-frame Y axis --
+        # the one that becomes robot YAW, since the optical frame has Y down --
+        # moved 0.00203 rad/s, i.e. 7.0 deg/min of accumulating heading error,
+        # and changed sign. A single startup calibration is therefore worth
+        # very little an hour into a patrol. These re-estimate it automatically
+        # whenever the robot has been genuinely still long enough, which is the
+        # only time the estimate is valid.
+        self.declare_parameter('auto_rezero_enabled', True)
+        self.declare_parameter('auto_rezero_interval_s', 60.0)
+        self.declare_parameter('auto_rezero_still_s', 3.0)
         # If >0 these override the measured noise floor.
         self.declare_parameter('gyro_stddev_override', 0.0)
         self.declare_parameter('accel_stddev_override', 0.0)
@@ -53,6 +65,9 @@ class CameraImuNode(Node):
         self.frame_override = p('frame_id').value
         self.n_bias = int(p('bias_samples').value)
         self.still_max = float(p('still_gyro_range_max').value)
+        self.auto_rezero = bool(p('auto_rezero_enabled').value)
+        self.rezero_interval = float(p('auto_rezero_interval_s').value)
+        self.rezero_still_s = float(p('auto_rezero_still_s').value)
 
         self.gyro_bias = [0.0, 0.0, 0.0]
         self.gyro_cov = self._diag(0.01)   # placeholder until measured
@@ -62,6 +77,12 @@ class CameraImuNode(Node):
         self._buf_g, self._buf_a = [], []
         self._on_done = None
         self._count = 0
+        self._still_window = []
+        # ~1 s of samples at 203 Hz: long enough that a brief pause during a
+        # manoeuvre cannot masquerade as the robot being at rest.
+        self._still_window_n = 200
+        self._still_since = None      # monotonic time the robot last started being still
+        self._last_bias_time = 0.0    # monotonic time of the last successful estimate
 
         if p('bias_file').value:
             self._load_bias(p('bias_file').value)
@@ -128,6 +149,9 @@ class CameraImuNode(Node):
             self._collecting = True
 
     def _finish_startup_bias(self, ok, msg):
+        # Seed the auto-rezero clock so the periodic re-estimate does not fire
+        # immediately on top of the startup one.
+        self._last_bias_time = time.monotonic()
         lvl = self.get_logger().info if ok else self.get_logger().warn
         lvl(msg)
 
@@ -146,6 +170,8 @@ class CameraImuNode(Node):
                     if self._on_done:
                         self._on_done(ok, text)
                     self._on_done = None
+        else:
+            self._maybe_auto_rezero(g)
 
         out = Imu()
         out.header.stamp = msg.header.stamp          # preserve the DEVICE stamp
@@ -161,6 +187,54 @@ class CameraImuNode(Node):
         out.orientation.w = 1.0
         self.pub.publish(out)
         self._count += 1
+
+    # -------------------------------------------------------- automatic re-zero
+    def _maybe_auto_rezero(self, g):
+        """Re-estimate gyro bias periodically, but only while the robot is
+        genuinely still -- a bias estimated during motion would bake the
+        motion into the correction. Stillness is judged from the gyro itself
+        rather than from /cmd_vel: a commanded stop is not the same as a
+        stopped robot, and this node deliberately has no dependency on the
+        drive stack."""
+        if not self.auto_rezero:
+            return
+        now = time.monotonic()
+
+        # Track a short rolling window of recent samples and require the whole
+        # window to be quiet, so a momentary lull mid-motion cannot qualify.
+        self._still_window.append(g)
+        if len(self._still_window) > self._still_window_n:
+            self._still_window.pop(0)
+        if len(self._still_window) < self._still_window_n:
+            return
+
+        rng = max(max(s[i] for s in self._still_window) - min(s[i] for s in self._still_window)
+                  for i in range(3))
+        if rng > self.still_max:
+            self._still_since = None
+            return
+
+        if self._still_since is None:
+            self._still_since = now
+            return
+
+        if (now - self._still_since) < self.rezero_still_s:
+            return
+        if (now - self._last_bias_time) < self.rezero_interval:
+            return
+
+        self.get_logger().info(
+            f'still for {now - self._still_since:.1f}s -- re-estimating gyro bias')
+        self._start_collection(self._finish_auto_rezero)
+
+    def _finish_auto_rezero(self, ok, msg):
+        self._last_bias_time = time.monotonic()
+        self._still_since = None
+        self._still_window.clear()
+        if ok:
+            self.get_logger().info(f'auto re-zero: {msg}')
+        else:
+            self.get_logger().warn(f'auto re-zero skipped: {msg}')
 
     # -------------------------------------------------------------------- solve
     def _solve_bias(self):
