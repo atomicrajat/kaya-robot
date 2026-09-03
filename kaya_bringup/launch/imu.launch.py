@@ -43,6 +43,11 @@ def generate_launch_description():
                                           'it publishes real encoder-derived /joint_states, so the '
                                           'zero-filling placeholder below must not also publish '
                                           'there or the two fight over the same topic.'),
+        DeclareLaunchArgument('enable_color', default_value='false',
+                              description='Phase 1-3 need no colour; Phase 4 (RTAB-Map/VSLAM) does.'),
+        DeclareLaunchArgument('depth_registration', default_value='false',
+                              description='Align depth to the colour frame -- needed for RGB-D SLAM, '
+                                          'not for plain IMU/TF bringup.'),
 
         # ------------------------------------------------ 1. the camera driver
         # Including another package's launch file rather than re-declaring its
@@ -55,7 +60,8 @@ def generate_launch_description():
                 'enable_accel': 'true',
                 'enable_gyro': 'true',
                 'enable_sync_output_accel_gyro': 'true',   # -> /camera/gyro_accel/sample
-                'enable_color': 'false',                   # Phase 1 needs no colour
+                'enable_color': LaunchConfiguration('enable_color'),
+                'depth_registration': LaunchConfiguration('depth_registration'),
             }.items(),
         ),
 

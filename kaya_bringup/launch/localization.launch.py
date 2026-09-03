@@ -31,6 +31,10 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('rviz', default_value='false'),
+        DeclareLaunchArgument('enable_color', default_value='false',
+                              description='Needed for Phase 4 RGB-D SLAM, not for plain localization.'),
+        DeclareLaunchArgument('depth_registration', default_value='false',
+                              description='Align depth to colour -- ditto, Phase 4 only.'),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -38,6 +42,8 @@ def generate_launch_description():
             launch_arguments={
                 'real_joint_states': 'true',  # kaya_drive publishes the real ones below
                 'rviz': use_rviz,
+                'enable_color': LaunchConfiguration('enable_color'),
+                'depth_registration': LaunchConfiguration('depth_registration'),
             }.items(),
         ),
 
