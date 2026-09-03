@@ -45,6 +45,34 @@ def generate_launch_description():
     delete_db_flag = PythonExpression(
         ["'--delete_db_on_start' if '", LaunchConfiguration('delete_db'), "' == 'true' else ''"])
 
+    # Vis/MinInliers: how many feature correspondences must survive geometric
+    # (RANSAC) verification before a loop closure is accepted. RTAB-Map's
+    # default of 20 suits wide-FOV cameras with generous scene overlap; a
+    # 848x480 depth camera indoors legitimately yields fewer.
+    #
+    # Measured on a real 3.84 m-out / 10.7 m loop returning to within 5 cm and
+    # 3 deg: two correct candidates scored 10/20 and 13/20 inliers out of
+    # ~112 matches. Those same candidates scored 0/20 before the rectified-
+    # colour and depth-alignment fixes, so the geometry is now sound and 20 is
+    # simply the wrong bar for this sensor.
+    #
+    # 12 keeps a real geometric-consistency requirement -- it is not "accept
+    # anything" -- while admitting genuine revisits this camera can actually
+    # produce. Raise it if false positives ever appear (a loop closure that
+    # visibly teleports the map is the symptom).
+    min_inliers = LaunchConfiguration('min_inliers')
+
+    # Vis/InlierDistance: how far a reprojected 3D correspondence may sit from
+    # its observed position and still count as an inlier. RTAB-Map's 0.1 m
+    # default assumes better depth than this sensor has at range: the Gemini
+    # 335L's stereo depth error grows with distance squared, so at the 3-4 m
+    # where these loop closures actually occur a single point is easily 3-5 cm
+    # off, and the relative error across the two frames being matched can
+    # exceed 10 cm on its own. That rejects genuine correspondences as
+    # outliers. 0.15 m reflects the sensor's real accuracy at loop-closure
+    # range rather than loosening the test arbitrarily.
+    inlier_distance = LaunchConfiguration('inlier_distance')
+
     return LaunchDescription([
         DeclareLaunchArgument('delete_db', default_value='false',
                               description='Start a fresh map instead of continuing '
@@ -53,6 +81,13 @@ def generate_launch_description():
                               description='RTAB-Map\'s own Qt viz UI -- needs a display; '
                                           'off by default on a headless robot.'),
         DeclareLaunchArgument('rviz', default_value='false'),
+        DeclareLaunchArgument('inlier_distance', default_value='0.15',
+                              description='Vis/InlierDistance (m) -- see the note above; '
+                                          'RTAB-Map\'s 0.1 default assumes better depth '
+                                          'than this sensor delivers at 3-4 m.'),
+        DeclareLaunchArgument('min_inliers', default_value='12',
+                              description='Vis/MinInliers -- see the note above; RTAB-Map\'s '
+                                          'default of 20 is tuned for wider-FOV sensors.'),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -119,7 +154,8 @@ def generate_launch_description():
                 'visual_odometry': 'false',   # use ours, not RTAB-Map's own VO
                 'publish_tf_map': 'true',     # RTAB-Map publishes map -> odom
 
-                'args': delete_db_flag,
+                'args': [delete_db_flag, ' --Vis/MinInliers ', min_inliers,
+                         ' --Vis/InlierDistance ', inlier_distance],
 
                 'rtabmap_viz': LaunchConfiguration('rtabmap_viz'),
                 'rviz': LaunchConfiguration('rviz'),
