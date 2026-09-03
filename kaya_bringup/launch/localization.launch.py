@@ -35,6 +35,12 @@ def generate_launch_description():
                               description='Needed for Phase 4 RGB-D SLAM, not for plain localization.'),
         DeclareLaunchArgument('depth_registration', default_value='false',
                               description='Align depth to colour -- ditto, Phase 4 only.'),
+        DeclareLaunchArgument('enable_color_undistortion', default_value='false',
+                              description='Rectified colour output -- ditto, Phase 4 only.'),
+        DeclareLaunchArgument('color_width', default_value='0'),
+        DeclareLaunchArgument('color_height', default_value='0'),
+        DeclareLaunchArgument('depth_width', default_value='0'),
+        DeclareLaunchArgument('depth_height', default_value='0'),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -44,6 +50,11 @@ def generate_launch_description():
                 'rviz': use_rviz,
                 'enable_color': LaunchConfiguration('enable_color'),
                 'depth_registration': LaunchConfiguration('depth_registration'),
+                'enable_color_undistortion': LaunchConfiguration('enable_color_undistortion'),
+                'color_width': LaunchConfiguration('color_width'),
+                'color_height': LaunchConfiguration('color_height'),
+                'depth_width': LaunchConfiguration('depth_width'),
+                'depth_height': LaunchConfiguration('depth_height'),
             }.items(),
         ),
 

@@ -60,6 +60,37 @@ def generate_launch_description():
             launch_arguments={
                 'enable_color': 'true',
                 'depth_registration': 'true',
+                # RTAB-Map expects RECTIFIED images -- rtabmap_launch's own
+                # default topic name is literally "image_rect_color". The
+                # Gemini 335L's factory camera_info carries real plumb_bob
+                # distortion (k1 -0.034, k2 0.038), and the raw stream is
+                # distorted, so feeding image_raw as if it were rectified made
+                # 3D reprojection systematically wrong: 2D appearance matching
+                # still worked (both frames distorted identically, ~105
+                # matches) but every point failed geometric verification, i.e.
+                # the "Not enough inliers 0/20" loop-closure rejections. This
+                # makes the driver publish genuinely undistorted colour, and
+                # its camera_info then reports D = all zeros.
+                'enable_color_undistortion': 'true',
+                # Match colour to the depth sensor's NATIVE 848x480 so the
+                # driver's depth->colour registration is 1:1 pixel work.
+                # At the 1280x720 default the SW aligner could not keep up and
+                # silently passed ~15% of frames through UNALIGNED at native
+                # 848x480 -- while camera_info still advertised 1280x720, so
+                # those frames' depth got projected into 3D with intrinsics off
+                # by ~1.5x. Measured 483/483 consistent after matching; it was
+                # 263/309 (85.1%) before.
+                # HW alignment would avoid the CPU cost entirely but the device
+                # rejects it for this profile pair ("Current stream profile is
+                # not support hardware d2c process"), so SW + matched
+                # resolutions is the working combination.
+                # 848x480 is also the right call for SLAM on an 8 GB board --
+                # curriculum Sec. 03: resolution and frame rate are budget
+                # decisions, not defaults.
+                'color_width': '848',
+                'color_height': '480',
+                'depth_width': '848',
+                'depth_height': '480',
             }.items(),
         ),
 
@@ -71,6 +102,14 @@ def generate_launch_description():
                 'depth_topic': '/camera/depth/image_raw',
                 'camera_info_topic': '/camera/color/camera_info',
                 'approx_sync': 'true',    # driver does not pre-sync rgb/depth/info itself
+                # Guard rail, not a fix for anything currently broken: measured
+                # colour-vs-depth stamp gap is 0.3 ms median / 0.4 ms max, so
+                # this drops nothing in normal operation. It bounds the damage
+                # if a stream ever stalls, since the default (0.0) means an
+                # INFINITE permitted gap -- pairing a colour frame with
+                # arbitrarily stale depth would put the 3D points somewhere the
+                # robot no longer is.
+                'approx_sync_max_interval': '0.04',
 
                 'frame_id': 'base_footprint',
                 # TF, not a topic: we already publish a real odom -> base_footprint

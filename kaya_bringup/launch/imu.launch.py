@@ -48,6 +48,14 @@ def generate_launch_description():
         DeclareLaunchArgument('depth_registration', default_value='false',
                               description='Align depth to the colour frame -- needed for RGB-D SLAM, '
                                           'not for plain IMU/TF bringup.'),
+        DeclareLaunchArgument('enable_color_undistortion', default_value='false',
+                              description='Publish rectified colour (and zeroed distortion coeffs '
+                                          'in camera_info). Required by RGB-D SLAM -- see '
+                                          'slam_rtabmap.launch.py.'),
+        DeclareLaunchArgument('color_width', default_value='0'),
+        DeclareLaunchArgument('color_height', default_value='0'),
+        DeclareLaunchArgument('depth_width', default_value='0'),
+        DeclareLaunchArgument('depth_height', default_value='0'),
 
         # ------------------------------------------------ 1. the camera driver
         # Including another package's launch file rather than re-declaring its
@@ -62,6 +70,11 @@ def generate_launch_description():
                 'enable_sync_output_accel_gyro': 'true',   # -> /camera/gyro_accel/sample
                 'enable_color': LaunchConfiguration('enable_color'),
                 'depth_registration': LaunchConfiguration('depth_registration'),
+                'enable_color_undistortion': LaunchConfiguration('enable_color_undistortion'),
+                'color_width': LaunchConfiguration('color_width'),
+                'color_height': LaunchConfiguration('color_height'),
+                'depth_width': LaunchConfiguration('depth_width'),
+                'depth_height': LaunchConfiguration('depth_height'),
             }.items(),
         ),
 
