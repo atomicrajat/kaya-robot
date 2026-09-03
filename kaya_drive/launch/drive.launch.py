@@ -11,6 +11,10 @@ Run alongside kaya_bringup's sensor/TF bringup for a live TF tree:
 Then drive it:
 
     ros2 run teleop_twist_keyboard teleop_twist_keyboard
+
+Phase 3 (curriculum Sec. 03) fuses this with the IMU via an EKF, which then
+owns odom -> base_footprint instead of this node -- see
+kaya_bringup/launch/localization.launch.py, which sets publish_tf:=false here.
 """
 
 from launch import LaunchDescription
@@ -31,6 +35,9 @@ def generate_launch_description():
         # measured-2m-roll calibration gives a corrected value.
         DeclareLaunchArgument('wheel_speed_scale', default_value='0.0'),
         DeclareLaunchArgument('cmd_vel_timeout', default_value='0.5'),
+        DeclareLaunchArgument('publish_tf', default_value='true',
+                              description='odom -> base_footprint. Set false when an EKF '
+                                          '(Phase 3) publishes that transform instead.'),
 
         Node(
             package='kaya_drive', executable='drive_node', name='drive_node',
@@ -41,6 +48,7 @@ def generate_launch_description():
                 'max_angular_speed': LaunchConfiguration('max_angular_speed'),
                 'wheel_speed_scale': LaunchConfiguration('wheel_speed_scale'),
                 'cmd_vel_timeout': LaunchConfiguration('cmd_vel_timeout'),
+                'publish_tf': LaunchConfiguration('publish_tf'),
             }],
         ),
     ])
