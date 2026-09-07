@@ -114,6 +114,26 @@ def generate_launch_description():
                 'enable_color': LaunchConfiguration('depth_for_nvblox'),
                 'enable_depth': LaunchConfiguration('depth_for_nvblox'),
                 'depth_registration': LaunchConfiguration('depth_for_nvblox'),
+                # The depth POINT CLOUD exists for exactly one consumer:
+                # collision_monitor's safety layer (config/nav2.yaml). cuVSLAM
+                # uses the IR pair and nvblox uses the depth IMAGE, so nothing
+                # else reads it -- which makes publishing it at full 848x480
+                # (407k points, ~9 Hz) an expensive way to serve one subscriber
+                # on a board already sharing 8 GB between cuVSLAM and nvblox.
+                #
+                # It showed up as latency, not CPU%. Measured stamp lag on
+                # /camera/depth/points: 0.508 s median while stationary, spiking
+                # to 1.5-1.8 s under motion -- past collision_monitor's timeout,
+                # so it kept declaring its only source invalid and STOPPING the
+                # robot mid-goal.
+                #
+                # Decimating 4x in each axis leaves ~25k points, which is ample
+                # for "is something in the way" and costs a fraction as much.
+                # The alternative was raising source_timeout again, but a
+                # safety layer reasoning about 1.8 s-old data is decorative --
+                # better to make the data fresh than to widen the window.
+                'enable_point_cloud': LaunchConfiguration('depth_for_nvblox'),
+                'point_cloud_decimation_filter_factor': '4',
                 'enable_accel': 'true',
                 'enable_gyro': 'true',
                 'enable_sync_output_accel_gyro': 'true',

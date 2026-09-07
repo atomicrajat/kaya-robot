@@ -495,7 +495,27 @@ collision_monitor:
     state_topic: "collision_monitor_state"
     # See the note at the controller's transform_tolerance above.
     transform_tolerance: 0.8
-    source_timeout: 1.0
+    # MEASURED. The depth cloud's stamp lag under the full stack is 0.508 s
+    # median / 0.535 s p90 / 0.935 s max -- and the stock 1.0 s timeout sits
+    # right on top of that max, so the source was rejected intermittently:
+    #
+    #   [depth_cloud]: Latest source and current collision monitor node
+    #   timestamps differ on 1.039636 seconds. Ignoring the source.
+    #   Robot to stop due to invalid source.
+    #
+    # collision_monitor's response to losing its only source is to STOP the
+    # robot, which is the right call in principle but meant the robot was
+    # braking itself mid-goal for no physical reason.
+    #
+    # 1.5 s clears the measured max with margin. Be clear about what that
+    # buys and costs: this layer may now act on obstacle data up to 1.5 s old,
+    # which at 0.15 m/s is ~22 cm of travel against a 0.16 m robot radius. It
+    # is a BACKSTOP, not the primary avoidance -- nvblox and the costmap are
+    # the primary, and they see the same data sooner.
+    #
+    # The lag is not inherent: idle, these same topics stamp within 0.030 s.
+    # It is contention. If the pipeline gets lighter, bring this back down.
+    source_timeout: 1.5
     base_shift_correction: True
     stop_pub_timeout: 2.0
     # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,
