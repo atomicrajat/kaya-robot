@@ -278,22 +278,39 @@ def generate_launch_description():
                         # slice heights genuinely floor-referenced. See
                         # config/nvblox.yaml -- the two must be reasoned about
                         # together.
-                        # This robot is a wheeled base on a flat floor: it has
-                        # three degrees of freedom, not six. Left unconstrained
-                        # the estimator is free to drift in the other three, and
-                        # it does -- a dark-room run put the robot at
-                        # Z = -1.795 m, 1.8 metres below the floor it was
-                        # standing on, after 2 m of driving.
+                        # TRIED AND REJECTED, kept documented so it is not
+                        # tried again. Kaya is a wheeled base on a flat floor,
+                        # so constraining odometry to the ground plane looks
+                        # obviously correct -- three degrees of freedom instead
+                        # of six, and it directly targets a dark-room run that
+                        # put the robot at Z = -1.795 m.
                         #
-                        # Constraining odometry to the ground plane removes that
-                        # freedom. It is not a tuning fudge; it is telling the
-                        # estimator a true fact about the robot that it
-                        # otherwise has to infer from noisy data.
+                        # Measured on a there-and-back loop, night, projector
+                        # on, same conditions both times:
                         #
-                        # Only valid while the floor really is flat. If Kaya
-                        # ever has to cross a ramp or a threshold of any height,
-                        # this has to come back off.
-                        'enable_ground_constraint_in_odometry': True,
+                        #     no constraint    8.5 m path   raw VIO drift 14.5%
+                        #     constraint      24.6 m path   raw VIO drift 32%
+                        #
+                        # It also failed at its own stated job. Raw VIO Z was
+                        # pinned to 0.000 exactly as intended, but map -> odom
+                        # then absorbed 0.790 m of Z, leaving the FINAL pose at
+                        # Z = 0.875. The constraint does not flatten the
+                        # trajectory; it relocates the error into the SLAM layer
+                        # where the constraint does not reach.
+                        #
+                        # The likely mechanism for the harm: this robot really
+                        # does pitch and roll slightly -- omni rollers, real
+                        # floors, acceleration -- so forcing those to zero tells
+                        # the estimator something false, and the inconsistency
+                        # has nowhere to go but planar motion. Over-constraining
+                        # injects error instead of removing it.
+                        #
+                        # Caveat: one run each and the routes differed in
+                        # length, so the percentages are not a perfectly clean
+                        # comparison. But there is no evidence it helps, a
+                        # mechanism by which it hurts, and it demonstrably did
+                        # not flatten the map.
+                        'enable_ground_constraint_in_odometry': False,
                         'base_frame': 'base_footprint',
                         'camera_optical_frames': [
                             'camera_left_ir_optical_frame',
