@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Save the running cuVSLAM session's map so it can be reused next time.
+#
+#   kaya_save_map ~/kaya_maps/home
+#
+# Then bring the stack up against it:
+#
+#   ros2 launch kaya_bringup nav.launch.py map_path:=/home/orin-nano/kaya_maps/home
+#
+# Why bother: without a saved map, cuVSLAM's origin is wherever the robot
+# happened to be switched on, so a goal recorded yesterday points somewhere
+# meaningless today. With one, the robot localizes back into the same
+# coordinate system -- measured recovering to within 7 mm from a pose hint
+# that was 1.8 m wrong, so it genuinely recognises the place rather than
+# trusting the hint.
+#
+# Drive the robot around the space first. The map only contains what the
+# camera has actually seen, and a map built from one viewpoint will only
+# relocalize from near that viewpoint.
+
+set -u
+
+if [ $# -lt 1 ]; then
+    echo "usage: kaya_save_map <path>" >&2
+    echo "  e.g. kaya_save_map ~/kaya_maps/home" >&2
+    exit 2
+fi
+
+# cuVSLAM writes the map itself and needs an absolute path -- it does not
+# expand ~ or resolve relative paths against your shell's directory.
+DEST=$(python3 -c "import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))" "$1")
+mkdir -p "$(dirname "$DEST")"
+
+# Deliberately NOT gated on `ros2 node list`. That is the ros2 CLI's graph
+# discovery, and on this machine it routinely reports "Node not found" for
+# nodes that are demonstrably running and publishing -- stale FastDDS shared
+# memory is enough to break it. Gating on it made this script refuse to save a
+# map while visual_slam was up and had just localized. So: attempt the call
+# and judge by the result, with a timeout so a genuinely absent service fails
+# fast instead of hanging.
+echo "==> saving map to ${DEST}"
+OUT=$(timeout 120 ros2 service call /visual_slam/save_map \
+        isaac_ros_visual_slam_interfaces/srv/FilePath \
+        "{file_path: ${DEST}}" 2>&1)
+RC=$?
+
+if [ $RC -eq 124 ]; then
+    echo "==> TIMED OUT waiting on /visual_slam/save_map" >&2
+    echo "    Is the stack running? Large maps can also just be slow." >&2
+    exit 1
+fi
+
+if echo "$OUT" | grep -q "success=True"; then
+    SIZE=$(du -sh "$DEST" 2>/dev/null | cut -f1)
+    echo "==> saved (${SIZE:-unknown size})"
+    echo "    reuse it with:"
+    echo "      ros2 launch kaya_bringup nav.launch.py map_path:=${DEST}"
+    exit 0
+fi
+
+echo "==> SAVE FAILED" >&2
+echo "$OUT" | tail -5 >&2
+exit 1

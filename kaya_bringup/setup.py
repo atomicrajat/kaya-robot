@@ -22,6 +22,6 @@ setup(
     description='Launch files composing the Kaya robot stack.',
     license='Apache-2.0',
     entry_points={'console_scripts': [
-        'cuvslam_origin_reset = kaya_bringup.origin_reset_node:main',
+        'cuvslam_origin_anchor = kaya_bringup.origin_anchor_node:main',
     ]},
 )

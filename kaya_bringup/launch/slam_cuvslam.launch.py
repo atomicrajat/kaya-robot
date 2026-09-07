@@ -93,6 +93,15 @@ def generate_launch_description():
                               description='Publish TF stamped with current time instead of the '
                                           'image time. Only needed if camera latency regresses '
                                           '-- see the note at the parameter.'),
+        DeclareLaunchArgument('map_path', default_value='',
+                              description='Load this saved cuVSLAM map and localize in it, '
+                                          'instead of starting a fresh coordinate system. '
+                                          'Empty means map-less. See the anchor node below.'),
+        DeclareLaunchArgument('hint_x', default_value='0.0',
+                              description='Rough starting pose in the saved map. Only a hint -- '
+                                          'verified to recover from one 1.8 m off.'),
+        DeclareLaunchArgument('hint_y', default_value='0.0'),
+        DeclareLaunchArgument('hint_yaw', default_value='0.0'),
         DeclareLaunchArgument('auto_reset', default_value='true',
                               description='Re-zero the tracker once after startup settles. '
                                           'See the ORIGIN note at the bottom of this file.'),
@@ -294,19 +303,28 @@ def generate_launch_description():
             ],
         ),
 
-        # ------------------------------------------------- ORIGIN: re-zero once
-        # cuVSLAM's origin is wherever the tracker thought it was when it
-        # initialised, which is when it is least trustworthy -- measured here
-        # as a (0.285, -0.061, -0.360) m / -9 deg offset on a robot that never
-        # moved. The full reasoning, and why this is a node watching the
-        # tracker rather than a fixed launch delay, is in origin_reset_node.py.
-        # Short version: a fixed delay guesses at a machine whose startup time
-        # is not predictable, and the first version of this guessed wrong and
-        # reset the tracker mid-initialisation.
+        # ------------------------------------------------ MAP FRAME: anchor it
+        # Establishes where "map" is, exactly once, after tracking is healthy.
+        # With map_path set it LOCALIZES in that saved map, so the coordinate
+        # system matches the session that built it and any goal recorded
+        # against it is still valid after a reboot. Without map_path it
+        # re-zeroes, pinning a fresh origin to wherever the robot stands.
+        #
+        # Doing both would be a bug: a reset after a successful localization
+        # throws the localization away. That is why one node owns the choice
+        # rather than it being two flags to remember. Full reasoning, and the
+        # measurements behind waiting on the tracker instead of a timer, are in
+        # origin_anchor_node.py.
         Node(
-            package='kaya_bringup', executable='cuvslam_origin_reset',
-            name='cuvslam_origin_reset', output='screen',
+            package='kaya_bringup', executable='cuvslam_origin_anchor',
+            name='cuvslam_origin_anchor', output='screen',
             condition=IfCondition(LaunchConfiguration('auto_reset')),
-            parameters=[{'settle_s': LaunchConfiguration('auto_reset_settle_s')}],
+            parameters=[{
+                'settle_s': LaunchConfiguration('auto_reset_settle_s'),
+                'map_path': LaunchConfiguration('map_path'),
+                'hint_x': LaunchConfiguration('hint_x'),
+                'hint_y': LaunchConfiguration('hint_y'),
+                'hint_yaw': LaunchConfiguration('hint_yaw'),
+            }],
         ),
     ])
