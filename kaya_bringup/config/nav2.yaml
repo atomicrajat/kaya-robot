@@ -273,7 +273,18 @@ local_costmap:
       nvblox_layer:
         plugin: "nvblox::nav2::NvbloxCostmapLayer"
         enabled: True
-        nvblox_map_slice_topic: "/nvblox_node/static_map_slice"
+        # combined_map_slice, NOT static_map_slice. With nvblox in dynamic
+        # mode the two differ in exactly the way that matters: the static
+        # slice has moving objects DELIBERATELY REMOVED, so subscribing to it
+        # here would mean the robot cannot see a person standing in front of
+        # it. Switching to dynamic mapping without also switching this topic
+        # makes the robot LESS safe than static mapping was, not more, and
+        # nothing warns you -- both topics publish happily at ~4.8 Hz.
+        #
+        # combined = static structure + whatever is currently moving, which is
+        # what a costmap should contain. dynamic_map_slice alone would be the
+        # opposite mistake: obstacles but no walls.
+        nvblox_map_slice_topic: "/nvblox_node/combined_map_slice"
         # Beyond this the layer stops marking; keep it comfortably inside the
         # depth camera's useful range (Gemini 335L degrades with distance
         # squared, and our loop-closure work showed 3-4 m is already noisy).
@@ -346,7 +357,18 @@ global_costmap:
       nvblox_layer:
         plugin: "nvblox::nav2::NvbloxCostmapLayer"
         enabled: True
-        nvblox_map_slice_topic: "/nvblox_node/static_map_slice"
+        # combined_map_slice, NOT static_map_slice. With nvblox in dynamic
+        # mode the two differ in exactly the way that matters: the static
+        # slice has moving objects DELIBERATELY REMOVED, so subscribing to it
+        # here would mean the robot cannot see a person standing in front of
+        # it. Switching to dynamic mapping without also switching this topic
+        # makes the robot LESS safe than static mapping was, not more, and
+        # nothing warns you -- both topics publish happily at ~4.8 Hz.
+        #
+        # combined = static structure + whatever is currently moving, which is
+        # what a costmap should contain. dynamic_map_slice alone would be the
+        # opposite mistake: obstacles but no walls.
+        nvblox_map_slice_topic: "/nvblox_node/combined_map_slice"
         # Beyond this the layer stops marking; keep it comfortably inside the
         # depth camera's useful range (Gemini 335L degrades with distance
         # squared, and our loop-closure work showed 3-4 m is already noisy).

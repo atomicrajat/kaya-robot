@@ -37,9 +37,32 @@
     # if genuinely needed, and watch RAM when you do.
     voxel_size: 0.05
 
-    # static_tsdf: one rigid world. dynamic/occupancy modes cost more and buy
-    # nothing until Phase 7-8 wants moving-object handling.
-    mapping_type: static_tsdf
+    # dynamic, not static_tsdf. static_tsdf assumes one rigid world and fuses
+    # EVERYTHING it sees into it permanently -- so a person walking past the
+    # robot becomes a wall that is still there after they have left, and the
+    # planner keeps routing around a doorway that is actually clear.
+    #
+    # dynamic mode separates geometry that moves from geometry that does not.
+    # It maintains an extra set of voxel layers to do so; measured cost on this
+    # board, full stack running:
+    #
+    #     peak system used   3433 -> 3595 MB   (+162 MB)
+    #     nvblox RSS         1085 -> 1197 MB   (+112 MB)
+    #     memory available   4112 -> 3950 MB
+    #
+    # Affordable, and it buys the robot the ability to work around people.
+    #
+    # IMPORTANT: this changes which topic Nav2 must consume. See
+    # nvblox_map_slice_topic in nav2.yaml -- the static slice now has moving
+    # objects removed from it, so subscribing to it would hide people from the
+    # costmap entirely. The two files have to be reasoned about together.
+    #
+    # The other modes: static_occupancy is a lighter, less accurate static map;
+    # human_with_static_tsdf and human_with_static_occupancy do the same
+    # separation but driven by a SEGMENTATION MASK rather than geometry, which
+    # needs a network (isaac_ros_unet, not installed) and more GPU. Geometric
+    # detection needs neither and handles anything that moves, not just people.
+    mapping_type: dynamic
     esdf_mode: 2d
 
     static_mapper:
