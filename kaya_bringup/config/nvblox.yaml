@@ -99,4 +99,21 @@
       projective_integrator_max_integration_distance_m: 3.0
       esdf_integrator_max_distance_m: 2.0
 
+    # How often depth is FUSED, independent of how fast it arrives. The
+    # default is 40 Hz -- faster than the camera's 30 Hz, so every single frame
+    # gets integrated. That is the dominant load in this stack, and it starves
+    # the very pipeline feeding it: measured on the full mapping stack, depth
+    # arrived at only 17.4 Hz and cuVSLAM logged 3.8 dropped-frame warnings per
+    # second. Over a 32-minute mapping run that came to 8797 dropped frames and
+    # 45 cm of vertical pose drift, which left nvblox's own obstacle band 55 cm
+    # above the floor the robot was standing on. The map was unusable.
+    #
+    # 10 Hz is not a compromise, it is still oversampled. At this robot's
+    # 0.15 m/s cap that is one fusion every 1.5 cm of travel against a 5 cm
+    # voxel -- three integrations per voxel crossed. Nothing is lost.
+    #
+    # Note the neighbours: colour, ESDF and mesh all default to a sensible
+    # 5 Hz. Depth at 40 was the outlier, not the rule.
+    integrate_depth_rate_hz: 10.0
+
     publish_esdf_distance_slice: true

@@ -124,6 +124,38 @@ def generate_launch_description():
                 # Colour and depth are not used by this route. Leaving them off
                 # keeps USB bandwidth and GPU memory for SLAM, which matters on
                 # an 8 GB board (curriculum Sec. 03).
+                # MATCH COLOUR TO DEPTH. Both 848x480, and colour pinned to 30 fps.
+                #
+                # Left at the driver's 1280x720 default this quietly costs ~15%
+                # of every depth frame. depth_registration does the depth->colour
+                # alignment in SOFTWARE, and across a resolution mismatch it
+                # cannot keep up. Measured, camera alone with nothing else
+                # running:
+                #
+                #     colour 1280x720   depth 26.1 Hz   IR 29.9 Hz
+                #     colour  848x480   depth 30.0 Hz   IR 29.9 Hz
+                #
+                # That 15% loss is what drove the 32-minute mapping run to
+                # accumulate 8797 dropped-frame warnings and 45 cm of vertical
+                # pose drift, which put nvblox's obstacle band 55 cm above the
+                # floor the robot was standing on.
+                #
+                # This is the SECOND time this exact mismatch has bitten this
+                # project -- see slam_rtabmap.launch.py, where the SW aligner
+                # silently passed ~15% of frames through UNALIGNED at the same
+                # 1280x720/848x480 pairing. The lesson did not transfer to this
+                # route because the resolutions are set per-launch-file. If a
+                # third route appears, set them there too.
+                #
+                # colour_fps is pinned because at 848x480 the driver otherwise
+                # selects a 60 fps profile -- measured 59.4 Hz -- which is twice
+                # the frames nvblox consumes, for nothing.
+                'color_width': '848',
+                'color_height': '480',
+                'color_fps': '30',
+                'depth_width': '848',
+                'depth_height': '480',
+                'depth_fps': '30',
                 'enable_color': LaunchConfiguration('depth_for_nvblox'),
                 'enable_depth': LaunchConfiguration('depth_for_nvblox'),
                 'depth_registration': LaunchConfiguration('depth_for_nvblox'),
