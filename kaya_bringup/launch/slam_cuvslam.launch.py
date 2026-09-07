@@ -32,8 +32,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import (DeclareLaunchArgument, ExecuteProcess,
-                            IncludeLaunchDescription, TimerAction)
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
@@ -71,10 +70,10 @@ def generate_launch_description():
         DeclareLaunchArgument('auto_reset', default_value='true',
                               description='Re-zero the tracker once after startup settles. '
                                           'See the ORIGIN note at the bottom of this file.'),
-        DeclareLaunchArgument('auto_reset_delay_s', default_value='12.0',
-                              description='How long to let tracking stabilise before re-zeroing. '
-                                          'Must outlast the camera driver init (~1.6 s) and the '
-                                          'first seconds of dropped frames; 12 s is comfortable.'),
+        DeclareLaunchArgument('auto_reset_settle_s', default_value='5.0',
+                              description='How long cuVSLAM must track healthily before its '
+                                          'origin is re-zeroed. This is a settle window on the '
+                                          'TRACKER, not a delay from launch -- see the node.'),
 
         # ------------------------------------------------------- camera driver
         IncludeLaunchDescription(
@@ -156,7 +155,22 @@ def generate_launch_description():
                         'enable_image_denoising': False,
                         'tracking_mode': LaunchConfiguration('tracking_mode'),
 
-                        'base_frame': 'base_link',
+                        # base_footprint, NOT base_link. The URDF roots the robot
+                        # at base_footprint and parents base_link beneath it, so
+                        # publishing odom -> base_link here gives base_link TWO
+                        # parents. TF permits exactly one, and the tree splits:
+                        # "Could not find a connection between 'odom' and
+                        # 'base_footprint' ... Tf has two or more unconnected
+                        # trees", after which Nav2's costmaps cannot activate at
+                        # all. Anchoring here restores the REP-105 chain
+                        # map -> odom -> base_footprint -> base_link.
+                        #
+                        # This also puts the map origin ON THE FLOOR rather than
+                        # one wheel radius above it, which is what makes nvblox's
+                        # slice heights genuinely floor-referenced. See
+                        # config/nvblox.yaml -- the two must be reasoned about
+                        # together.
+                        'base_frame': 'base_footprint',
                         'camera_optical_frames': [
                             'camera_left_ir_optical_frame',
                             'camera_right_ir_optical_frame',
@@ -212,36 +226,17 @@ def generate_launch_description():
 
         # ------------------------------------------------- ORIGIN: re-zero once
         # cuVSLAM's origin is wherever the tracker thought it was when it
-        # initialised -- and initialisation is exactly when it is least
-        # trustworthy. MEASURED on this robot, stationary on the floor
-        # throughout: by the time tracking was healthy, map -> base_link read
-        # (0.285, -0.061, -0.360) m with -9.0 deg pitch. The -0.36 m in Z is
-        # the tell; the robot physically cannot descend 36 cm, so that pose was
-        # integrated, not travelled. The log shows frames being dropped over
-        # the same window (repeated "Delta between current and previous frame
-        # [66.7 ms]" against a 34 ms threshold), which is the likely cause.
-        #
-        # This is NOT drift. Once settled, the same tracker held 0.87 cm/min
-        # and 0.05 deg/min stationary, and returned a 16.4 m driven loop to
-        # 2.2 cm / 1.1 deg. The bad pose is a one-off startup artifact.
-        #
-        # Left alone it silently poisons everything downstream, because every
-        # map nvblox builds and every goal Nav2 is given is expressed in this
-        # frame. Resetting once, after tracking has stabilised, costs nothing
-        # and pins the origin to where the robot actually stands.
-        #
-        # Honest scope: one observed occurrence, not a characterised failure
-        # rate. The reset is cheap and correct either way -- if the root cause
-        # turns out to be something else entirely, this still leaves the origin
-        # in the right place. Set auto_reset:=false to observe the raw
-        # behaviour.
-        TimerAction(
-            period=LaunchConfiguration('auto_reset_delay_s'),
+        # initialised, which is when it is least trustworthy -- measured here
+        # as a (0.285, -0.061, -0.360) m / -9 deg offset on a robot that never
+        # moved. The full reasoning, and why this is a node watching the
+        # tracker rather than a fixed launch delay, is in origin_reset_node.py.
+        # Short version: a fixed delay guesses at a machine whose startup time
+        # is not predictable, and the first version of this guessed wrong and
+        # reset the tracker mid-initialisation.
+        Node(
+            package='kaya_bringup', executable='cuvslam_origin_reset',
+            name='cuvslam_origin_reset', output='screen',
             condition=IfCondition(LaunchConfiguration('auto_reset')),
-            actions=[ExecuteProcess(
-                cmd=['ros2', 'service', 'call', '/visual_slam/reset',
-                     'isaac_ros_visual_slam_interfaces/srv/Reset'],
-                output='screen',
-            )],
+            parameters=[{'settle_s': LaunchConfiguration('auto_reset_settle_s')}],
         ),
     ])

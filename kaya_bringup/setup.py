@@ -13,6 +13,7 @@ setup(
         (os.path.join('share', package_name), ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
+        (os.path.join('lib', package_name), glob('scripts/kaya_stop')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -20,5 +21,7 @@ setup(
     maintainer_email='atomicrajat619@gmail.com',
     description='Launch files composing the Kaya robot stack.',
     license='Apache-2.0',
-    entry_points={'console_scripts': []},
+    entry_points={'console_scripts': [
+        'cuvslam_origin_reset = kaya_bringup.origin_reset_node:main',
+    ]},
 )
