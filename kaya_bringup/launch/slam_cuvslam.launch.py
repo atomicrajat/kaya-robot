@@ -278,6 +278,22 @@ def generate_launch_description():
                         # slice heights genuinely floor-referenced. See
                         # config/nvblox.yaml -- the two must be reasoned about
                         # together.
+                        # This robot is a wheeled base on a flat floor: it has
+                        # three degrees of freedom, not six. Left unconstrained
+                        # the estimator is free to drift in the other three, and
+                        # it does -- a dark-room run put the robot at
+                        # Z = -1.795 m, 1.8 metres below the floor it was
+                        # standing on, after 2 m of driving.
+                        #
+                        # Constraining odometry to the ground plane removes that
+                        # freedom. It is not a tuning fudge; it is telling the
+                        # estimator a true fact about the robot that it
+                        # otherwise has to infer from noisy data.
+                        #
+                        # Only valid while the floor really is flat. If Kaya
+                        # ever has to cross a ramp or a threshold of any height,
+                        # this has to come back off.
+                        'enable_ground_constraint_in_odometry': True,
                         'base_frame': 'base_footprint',
                         'camera_optical_frames': [
                             'camera_left_ir_optical_frame',
