@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Shut the Kaya stack down and leave the wheel servos SAFE.
+#
+# Why this exists rather than "just pkill":
+#
+#   1. SERVOS. drive_node releases torque and restores position mode in its
+#      shutdown handler. SIGKILL it -- or kill `ros2 launch` and then lose
+#      patience -- and that handler never runs, so the servos stay in wheel
+#      mode with torque ENABLED, actively holding against the floor. Observed
+#      twice in one session. This script always ends by releasing them
+#      directly over the serial bus, whatever happened to the ROS side.
+#
+#   2. SELF-MATCHING pkill. `pkill -f "ros2 launch"` also matches the shell
+#      running the pkill, because that pattern appears in its own command
+#      line -- so the script kills itself partway through and leaves the stack
+#      half-up. Every pattern below uses the [f]irst-character-class trick so
+#      it cannot match this script. Also bit us twice.
+#
+#   3. ORDER. `ros2 launch` gets SIGTERM and a real grace period first, so
+#      nodes shut down properly; SIGKILL is the fallback, not the opening move.
+#
+# Usage: kaya_stop [grace_seconds]   (default 10)
+
+set -u
+GRACE="${1:-10}"
+BUS_RELEASE=/tmp/kaya_release.py
+
+echo "==> SIGTERM to ros2 launch, ${GRACE}s grace"
+pkill -TERM -f "[r]os2 launch kaya" 2>/dev/null
+
+for i in $(seq "$GRACE"); do
+    pgrep -f "[r]os2 launch kaya" >/dev/null 2>&1 || break
+    sleep 1
+done
+
+echo "==> SIGTERM to drive_node (this is what releases the servos)"
+pkill -TERM -f "[d]rive_node" 2>/dev/null
+sleep 3
+
+echo "==> SIGKILL stragglers"
+pkill -9 -f "[r]os2 launch kaya"      2>/dev/null
+pkill -9 -f "[c]omponent_container"   2>/dev/null
+pkill -9 -f "[n]vblox_node"           2>/dev/null
+pkill -9 -f "[d]rive_node"            2>/dev/null
+sleep 2
+
+LEFT=$(pgrep -c -f "[r]os2 launch kaya|[c]omponent_container|[n]vblox_node|[d]rive_node" 2>/dev/null || echo 0)
+echo "==> remaining stack processes: ${LEFT}"
+
+# Stale FastDDS shared-memory segments outlive SIGKILLed nodes and make the
+# next run log "Failed init_port fastrtps_port7000" and lose node discovery
+# (ros2 param/service calls return "Node not found" while topics still flow).
+rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null
+
+echo "==> releasing servos over the bus (belt and braces)"
+cat > "$BUS_RELEASE" <<'PYEOF'
+import sys
+sys.path.insert(0, "/home/orin-nano/ros2_ws/src/kaya/kaya_drive")
+from kaya_drive.feetech_bus import FeetechBus
+from kaya_drive.scservo_sdk import COMM_SUCCESS
+
+b = FeetechBus("/dev/ttyACM0", 1000000, [1, 2, 3])
+b.stop_and_release()
+bad = 0
+for sid in (1, 2, 3):
+    m, c, _ = b._read1(sid, 33)     # 33 = Mode; 0 = position mode = released
+    v, cv, _ = b._read1(sid, 62)    # 62 = present voltage, tenths of a volt
+    ok = c == COMM_SUCCESS and m == 0
+    bad += 0 if ok else 1
+    print("    servo %d: %s (mode=%s, %.1fV)"
+          % (sid, "RELEASED" if ok else "NOT RELEASED", m, v / 10.0))
+b.port.closePort()
+sys.exit(1 if bad else 0)
+PYEOF
+
+if python3 "$BUS_RELEASE"; then
+    echo "==> all servos released, safe to leave"
+    exit 0
+fi
+echo "==> WARNING: a servo did not confirm release -- check it before walking away"
+exit 1
