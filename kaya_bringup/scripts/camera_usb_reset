@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Put the Orbbec camera through a real USB port reset.
+
+The Gemini 335L gets wedged when its driver is killed mid-stream: the device
+still enumerates and the kernel is happy ("Found UVC 1.50 device",
+"authorized to connect"), /dev/video* all exist and nothing holds them -- but
+the Orbbec SDK hangs forever during device init. The camera node then logs
+NOTHING at all, and every downstream node waits on images that never come.
+cuVSLAM never initialises and there is no error anywhere to explain it.
+
+Toggling /sys/bus/usb/devices/*/authorized is NOT sufficient. It makes the
+kernel re-enumerate, which looks like a reset in dmesg, but leaves the device
+in the same wedged state -- tried it twice, camera stayed dead both times.
+
+USBDEVFS_RESET is the actual port reset, the closest thing to unplugging the
+cable without touching the robot. That recovered it first try (device init
+8.1 s, streams up).
+"""
+import fcntl
+import os
+import re
+import subprocess
+import sys
+
+USBDEVFS_RESET = ord('U') << 8 | 20
+ORBBEC_ID = '2bc5:0804'
+
+
+def main():
+    try:
+        out = subprocess.check_output(['lsusb']).decode()
+    except Exception as e:                                    # noqa: BLE001
+        print('lsusb failed: %r' % e)
+        return 1
+
+    m = re.search(r'Bus (\d+) Device (\d+): ID ' + ORBBEC_ID, out)
+    if not m:
+        print('Orbbec camera (%s) not on the USB bus -- nothing to reset' % ORBBEC_ID)
+        return 1
+
+    path = '/dev/bus/usb/%s/%s' % (m.group(1), m.group(2))
+    try:
+        fd = os.open(path, os.O_WRONLY)
+    except PermissionError:
+        print('need root to reset %s -- run with sudo' % path)
+        return 1
+    try:
+        fcntl.ioctl(fd, USBDEVFS_RESET, 0)
+    except Exception as e:                                    # noqa: BLE001
+        print('reset ioctl on %s failed: %r' % (path, e))
+        return 1
+    finally:
+        os.close(fd)
+
+    print('camera USB reset ok (%s)' % path)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

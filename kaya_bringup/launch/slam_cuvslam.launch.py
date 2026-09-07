@@ -67,6 +67,28 @@ def generate_launch_description():
         DeclareLaunchArgument('publish_odom_tf', default_value='true',
                               description='Let cuVSLAM own odom -> base_link. See the TF '
                                           'ownership note below before changing.'),
+        DeclareLaunchArgument('time_domain', default_value='system',
+                              description='Camera timestamp domain: system | global | device. '
+                                          'system is required for navigation -- see below.'),
+        # The driver defaults to 'global', and that default silently breaks
+        # Nav2. cuVSLAM stamps every transform it publishes with the CAMERA's
+        # frame time, so the camera's clock becomes the clock for map -> odom
+        # and odom -> base_footprint. Measured lag behind ROS time:
+        #
+        #     time_domain=global   0.879 s median  (image), 0.897 s (map->odom)
+        #     time_domain=system   0.030 s median  (image), 0.048 s (map->odom)
+        #
+        # The offset under 'global' is nearly constant (min 0.876, median
+        # 0.879), so it is a clock-sync problem, not jitter -- relative timing
+        # is fine, which is why VIO itself never complained. But Nav2 compares
+        # stamps against now, so every SLAM transform failed its tolerance as
+        # "Transform data too old", and that failure surfaced as the controller
+        # announcing "Reached the goal!" without the robot moving.
+        #
+        # Measured cost to VIO of switching: none detectable. vo_state stayed 1
+        # and track time was 10.8-15.3 ms, against 11.1 ms on 'global'. The
+        # left/right stereo pair is hardware-synced on the sensor, so both
+        # images still share a stamp whichever domain is used.
         DeclareLaunchArgument('auto_reset', default_value='true',
                               description='Re-zero the tracker once after startup settles. '
                                           'See the ORIGIN note at the bottom of this file.'),
@@ -85,7 +107,7 @@ def generate_launch_description():
                 # See the module docstring -- non-negotiable for stereo VSLAM.
                 'enable_laser': 'false',
                 'enable_frame_sync': 'true',
-                'time_domain': 'global',
+                'time_domain': LaunchConfiguration('time_domain'),
                 # Colour and depth are not used by this route. Leaving them off
                 # keeps USB bandwidth and GPU memory for SLAM, which matters on
                 # an 8 GB board (curriculum Sec. 03).

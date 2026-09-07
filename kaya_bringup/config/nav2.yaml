@@ -81,7 +81,18 @@ controller_server:
     # Progress checker parameters
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
+      # "Move at least this far within movement_time_allowance or you are
+      # stuck." The stock 0.5 m is tuned for a robot cruising at ~0.5 m/s over
+      # room-scale distances. This robot is capped at 0.15 m/s, and a typical
+      # test goal here is 0.5 m TOTAL -- so the robot could never move 0.5 m
+      # between checks and was declared stuck on every single goal, no matter
+      # how well it was tracking. Observed as repeated "Failed to make
+      # progress", which then triggered the wait/backup/spin recovery chain;
+      # the spin is why a pure-strafe goal ended with the robot rotated 130 deg.
+      #
+      # 0.10 m in 10 s is 0.01 m/s average. At this robot's speed that really
+      # is stuck, and it leaves room for MPPI's ramp-up and for short goals.
+      required_movement_radius: 0.10
       movement_time_allowance: 10.0
     # Goal checker parameters
     #precise_goal_checker:
@@ -92,8 +103,17 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      # The stock 0.25 m is most of this robot's own 0.32 m width -- it would
+      # report "arrived" while standing a full body-width from the goal, and
+      # on a 0.5 m test move that is half the journey. There is no reason to
+      # accept that here: cuVSLAM returned a 16.4 m driven loop to 2.2 cm and
+      # 1.1 deg, so the localisation is an order of magnitude better than the
+      # tolerance was asking for.
+      #
+      # 0.10 m / 0.15 rad (8.6 deg) is comfortably inside what the pose
+      # estimate supports while staying achievable for the controller.
+      xy_goal_tolerance: 0.10
+      yaw_goal_tolerance: 0.15
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
       time_steps: 56
@@ -118,7 +138,23 @@ controller_server:
       wz_max: 1.0
       iteration_count: 1
       prune_distance: 1.7
-      transform_tolerance: 0.1
+      # MEASURED, not guessed. cuVSLAM stamps its transforms with the CAMERA's
+      # frame time, so map -> odom and odom -> base_footprint are only ever as
+      # fresh as the camera's clock. With the Orbbec driver's time_domain=system
+      # that lag measures 0.048 s median but tails to 0.78 s.
+      #
+      # Nav2's 0.1 s default rejects that tail as "Transform data too old", and
+      # the way that failure SURFACES is the dangerous part: the controller
+      # reported "Reached the goal!" and bt_navigator logged "Goal succeeded"
+      # while the robot never moved a millimetre. A silent success is far worse
+      # than a loud failure.
+      #
+      # 0.8 s covers the measured tail. It is not free -- the controller may act
+      # on a pose up to 0.8 s old, which at this robot's 0.15 m/s cap is ~12 cm
+      # of position uncertainty -- so it is a ceiling to lower, not a default to
+      # keep. The real fix is upstream: if the camera's stamps get tighter, bring
+      # this back down. (time_domain=global was far worse: 0.897 s MEDIAN.)
+      transform_tolerance: 0.8
       temperature: 0.3
       gamma: 0.015
       # *** THE most important line in this file for THIS robot. ***
@@ -204,6 +240,16 @@ local_costmap:
       publish_frequency: 2.0
       global_frame: odom
       robot_base_frame: base_footprint
+      # The COSTMAP's own tolerance -- this is the one that governs
+      # getRobotPose(), and it is separate from the controller's. Neither
+      # costmap declared it at all, so both silently sat on the 0.3 s default
+      # while transform_tolerance was set on three OTHER nodes that were not
+      # the problem. Symptom: "Transform data too old when converting from map
+      # to odom", immediately followed by the controller announcing "Reached
+      # the goal!" without moving. See the note at the controller above for the
+      # measured camera-stamp lag this has to absorb (0.048 s median, 0.78 s
+      # tail).
+      transform_tolerance: 0.8
       rolling_window: true
       width: 3
       height: 3
@@ -233,9 +279,6 @@ local_costmap:
         # squared, and our loop-closure work showed 3-4 m is already noisy).
         max_obstacle_distance: 1.0
         inflation_distance: 0.35
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
       always_send_full_costmap: True
 
 global_costmap:
@@ -245,6 +288,16 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_footprint
+      # The COSTMAP's own tolerance -- this is the one that governs
+      # getRobotPose(), and it is separate from the controller's. Neither
+      # costmap declared it at all, so both silently sat on the 0.3 s default
+      # while transform_tolerance was set on three OTHER nodes that were not
+      # the problem. Symptom: "Transform data too old when converting from map
+      # to odom", immediately followed by the controller announcing "Reached
+      # the goal!" without moving. See the note at the controller above for the
+      # measured camera-stamp lag this has to absorb (0.048 s median, 0.78 s
+      # tail).
+      transform_tolerance: 0.8
       # MEASURED: footprint_radius in kaya.urdf.xacro. The real deck is a
       # truncated triangle; a circle enclosing it (0.143 chassis radius +
       # half the 25 mm wheel width + margin) is the correct conservative
@@ -252,6 +305,37 @@ global_costmap:
       robot_radius: 0.16
       resolution: 0.05
       track_unknown_space: true
+
+      # ------------------------------------------------ EXTENT: set explicitly
+      # These four lines are load-bearing, and their absence is not a harmless
+      # default. Nav2's stock global costmap is sized by the static map from
+      # map_server. This robot has no map_server -- SLAM supplies map -> odom
+      # and nvblox supplies obstacles, but nobody publishes an OccupancyGrid --
+      # so the costmap fell back to 5 x 5 m with its CORNER at the origin,
+      # covering x,y in [0, 5].
+      #
+      # cuVSLAM starts the robot at map (0, 0), which is that corner. Half the
+      # robot's own noise puts it on the wrong side: measured at
+      # (0.007, -0.017), i.e. 17 mm below the bottom edge. Every plan request
+      # then failed with "Robot is out of bounds of the costmap", the planner
+      # returned nothing, no cmd_vel was ever published, and the robot simply
+      # sat there with a goal accepted and Nav2 reporting healthy. Nothing in
+      # the lifecycle state says anything is wrong.
+      #
+      # Centring the window on the origin is what makes the start pose interior
+      # rather than a corner. 20 x 20 m at 5 cm is 160k cells -- cheap -- and
+      # covers any indoor space this robot will see before Phase 6 adds map
+      # save/load.
+      #
+      # Deliberately NOT rolling_window. The local costmap rolls (3 x 3 m, see
+      # above) because the controller only needs what is nearby, but the global
+      # costmap should retain everywhere nvblox has already mapped, so the
+      # planner can route back through explored space it can no longer see.
+      rolling_window: false
+      width: 20
+      height: 20
+      origin_x: -10.0
+      origin_y: -10.0
       plugins: ["nvblox_layer", "inflation_layer"]
       # NO LIDAR ON THIS ROBOT. Nav2's stock config expects a /scan topic;
       # obstacles here come from nvblox instead, which fuses the depth camera
@@ -268,9 +352,6 @@ global_costmap:
         # squared, and our loop-closure work showed 3-4 m is already noisy).
         max_obstacle_distance: 1.0
         inflation_distance: 0.35
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
@@ -332,7 +413,8 @@ behavior_server:
     local_frame: odom
     global_frame: map
     robot_base_frame: base_footprint
-    transform_tolerance: 0.1
+    # See the note at the controller's transform_tolerance above.
+    transform_tolerance: 0.8
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
@@ -378,10 +460,27 @@ velocity_smoother:
     stamp_smoothed_velocity_with_smoothing_time: False
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.5, 0.0, 2.0]
-    min_velocity: [-0.5, 0.0, -2.0]
-    max_accel: [2.5, 0.0, 3.2]
-    max_decel: [-2.5, 0.0, -3.2]
+    # [x, y, theta]. THE MIDDLE ELEMENT IS LATERAL VELOCITY, and nav2_bringup
+    # ships it as 0.0 because its reference robot is a differential-drive
+    # TurtleBot that physically cannot strafe.
+    #
+    # Left at 0.0 on this holonomic base it silently destroys the whole point
+    # of the Omni motion model set in the controller above. Measured on a
+    # 0.5 m strafe goal: MPPI produced a correct lateral command on
+    # /cmd_vel_nav, peaking at 0.133 m/s -- and every one of the 1043
+    # /cmd_vel_smoothed samples that came out the other side had y = 0.0
+    # exactly. The robot sat still while Nav2 reported healthy, and the only
+    # visible symptom was the progress checker eventually giving up with
+    # "Failed to make progress". Nothing named the smoother.
+    #
+    # x and theta are also brought in line with what the hardware will
+    # actually do: the smoother must not authorise more than kaya_drive's own
+    # clamps (0.15 m/s, 1.0 rad/s) or it hands the robot commands it silently
+    # saturates. Accelerations stay symmetric in x and y because the base is.
+    max_velocity: [0.15, 0.15, 1.0]
+    min_velocity: [-0.15, -0.15, -1.0]
+    max_accel: [2.5, 2.5, 3.2]
+    max_decel: [-2.5, -2.5, -3.2]
     odom_topic: "odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
@@ -394,7 +493,8 @@ collision_monitor:
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "cmd_vel"
     state_topic: "collision_monitor_state"
-    transform_tolerance: 0.2
+    # See the note at the controller's transform_tolerance above.
+    transform_tolerance: 0.8
     source_timeout: 1.0
     base_shift_correction: True
     stop_pub_timeout: 2.0
@@ -410,12 +510,28 @@ collision_monitor:
       min_points: 6
       visualize: False
       enabled: True
-    observation_sources: ["scan"]
-    scan:
-      type: "scan"
-      topic: "scan"
-      min_height: 0.15
-      max_height: 2.0
+    # NO LIDAR ON THIS ROBOT. The stock config lists a "scan" source on /scan,
+    # which nothing publishes here -- and collision_monitor does not fail
+    # loudly when its only source never arrives, it just keeps stopping the
+    # robot. Combined with the smoother bug above this was the second reason a
+    # strafe goal produced no motion: even the residual x velocities that
+    # survived the smoother came out of collision_monitor as exact zeros.
+    #
+    # The depth camera's own point cloud is the honest replacement. It keeps
+    # collision_monitor doing its real job -- a last-resort safety layer that
+    # is INDEPENDENT of the costmap and the planner, so a bug in nvblox or the
+    # controller cannot drive the robot into something.
+    #
+    # Heights are relative to base_frame_id (base_footprint), which sits on
+    # the floor, so unlike nvblox's slice these need no wheel-radius offset.
+    # The band matches config/nvblox.yaml: 5 cm clears floor noise, 20 cm is
+    # just over the robot's own height.
+    observation_sources: ["depth_cloud"]
+    depth_cloud:
+      type: "pointcloud"
+      topic: "/camera/depth/points"
+      min_height: 0.05
+      max_height: 0.20
       enabled: True
 
 docking_server:
@@ -466,7 +582,8 @@ docking_server:
       use_collision_detection: true
       costmap_topic: "local_costmap/costmap_raw"
       footprint_topic: "local_costmap/published_footprint"
-      transform_tolerance: 0.1
+      # See the note at the controller's transform_tolerance above.
+      transform_tolerance: 0.8
       projection_time: 5.0
       simulation_step: 0.1
       dock_collision_threshold: 0.3

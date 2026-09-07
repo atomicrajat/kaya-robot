@@ -6,53 +6,110 @@
 #   1. SERVOS. drive_node releases torque and restores position mode in its
 #      shutdown handler. SIGKILL it -- or kill `ros2 launch` and then lose
 #      patience -- and that handler never runs, so the servos stay in wheel
-#      mode with torque ENABLED, actively holding against the floor. Observed
-#      twice in one session. This script always ends by releasing them
-#      directly over the serial bus, whatever happened to the ROS side.
+#      mode with torque ENABLED, holding against the floor, and nothing on the
+#      robot says so. This script always ends by releasing them directly over
+#      the serial bus and reading Mode back, so the exit status reflects the
+#      hardware, not the assumption that a signal was delivered.
 #
-#   2. SELF-MATCHING pkill. `pkill -f "ros2 launch"` also matches the shell
-#      running the pkill, because that pattern appears in its own command
-#      line -- so the script kills itself partway through and leaves the stack
-#      half-up. Every pattern below uses the [f]irst-character-class trick so
-#      it cannot match this script. Also bit us twice.
+#   2. ORPHANS. nav.launch.py starts ~20 processes across three launch files.
+#      SIGKILL the parent `ros2 launch` and every one of them is re-parented to
+#      init and keeps spinning its executor. This is not theoretical: one
+#      afternoon of relaunches accumulated 65 orphaned Nav2 servers plus 14
+#      robot_state_publishers, load average hit 94 on a 6-core board, and the
+#      symptoms all pointed somewhere else entirely -- the camera took 27 s to
+#      set a log path and looked "wedged" (it was starved), cuVSLAM took 67 s
+#      to initialise, and its track time tripled. Hours went into diagnosing a
+#      USB problem that was really a scheduling problem.
 #
-#   3. ORDER. `ros2 launch` gets SIGTERM and a real grace period first, so
-#      nodes shut down properly; SIGKILL is the fallback, not the opening move.
+#      Two earlier versions of this script tried to enumerate node names and
+#      BOTH missed some -- first the Nav2 servers, then robot_state_publisher.
+#      Enumerating names is the wrong approach, so the primary mechanism is now
+#      the PROCESS GROUP: the launcher runs under setsid, so every descendant
+#      shares its PGID and one `kill -PGID` gets all of them, including nodes
+#      nobody thought to list. The name sweep is kept only as a fallback for
+#      processes orphaned by an earlier, less careful shutdown.
+#
+#   3. SELF-MATCHING pkill. `pkill -f "ros2 launch"` also matches the shell
+#      running it, because that pattern appears in its own command line -- so
+#      the script kills itself partway through and leaves the stack half up.
+#      Cost two debugging cycles. Patterns below use the [f]irst-character
+#      class trick so they cannot match this script.
 #
 # Usage: kaya_stop [grace_seconds]   (default 10)
 
 set -u
 GRACE="${1:-10}"
-BUS_RELEASE=/tmp/kaya_release.py
 
-echo "==> SIGTERM to ros2 launch, ${GRACE}s grace"
-pkill -TERM -f "[r]os2 launch kaya" 2>/dev/null
+# Truncated to 15 chars on purpose: Linux truncates `comm`, so ps shows
+# "controller_serv", not "controller_server", and matching the full name
+# silently finds nothing.
+STACK_PATTERN="bt_navigator|controller_serv|planner_server|behavior_serve|route_server|smoother_serve|velocity_smooth|collision_monit|opennav_dockin|waypoint_follo|lifecycle_mana|nvblox_node|drive_node|component_cont|cuvslam_origin|robot_state_pub|rviz2"
+
+# ---------------------------------------------- 1. the whole process group
+for PGID in $(ps -eo pgid,args | grep "[r]os2 launch kaya" | awk '{print $1}' | sort -u); do
+    echo "==> SIGTERM process group ${PGID}"
+    kill -TERM -- "-${PGID}" 2>/dev/null
+done
 
 for i in $(seq "$GRACE"); do
     pgrep -f "[r]os2 launch kaya" >/dev/null 2>&1 || break
     sleep 1
 done
 
-echo "==> SIGTERM to drive_node (this is what releases the servos)"
+# drive_node specifically: this is the one that releases the servos, and it
+# deserves its own SIGTERM and a moment to act on it.
+echo "==> SIGTERM drive_node (releases the servos)"
 pkill -TERM -f "[d]rive_node" 2>/dev/null
 sleep 3
 
-echo "==> SIGKILL stragglers"
-pkill -9 -f "[r]os2 launch kaya"      2>/dev/null
-pkill -9 -f "[c]omponent_container"   2>/dev/null
-pkill -9 -f "[n]vblox_node"           2>/dev/null
-pkill -9 -f "[d]rive_node"            2>/dev/null
-sleep 2
+for PGID in $(ps -eo pgid,args | grep "[r]os2 launch kaya" | awk '{print $1}' | sort -u); do
+    kill -9 -- "-${PGID}" 2>/dev/null
+done
 
-LEFT=$(pgrep -c -f "[r]os2 launch kaya|[c]omponent_container|[n]vblox_node|[d]rive_node" 2>/dev/null || echo 0)
+# ------------------------------------- 2. fallback sweep for older orphans
+STRAGGLERS=$(ps -eo pid,comm | grep -E "$STACK_PATTERN" | awk '{print $1}')
+if [ -n "$STRAGGLERS" ]; then
+    echo "==> sweeping $(echo "$STRAGGLERS" | wc -w) straggler(s) by name"
+    kill -TERM $STRAGGLERS 2>/dev/null
+    sleep 3
+    STRAGGLERS=$(ps -eo pid,comm | grep -E "$STACK_PATTERN" | awk '{print $1}')
+    [ -n "$STRAGGLERS" ] && kill -9 $STRAGGLERS 2>/dev/null
+fi
+sleep 1
+
+LEFT=$(ps -eo comm | grep -cE "$STACK_PATTERN")
 echo "==> remaining stack processes: ${LEFT}"
+if [ "$LEFT" -ne 0 ]; then
+    echo "    WARNING: something survived. Orphans stack up across relaunches"
+    echo "    and starve the next run. Inspect with:"
+    echo "      ps -eo pid,etimes,comm | grep -E '${STACK_PATTERN}'"
+fi
 
-# Stale FastDDS shared-memory segments outlive SIGKILLed nodes and make the
-# next run log "Failed init_port fastrtps_port7000" and lose node discovery
-# (ros2 param/service calls return "Node not found" while topics still flow).
+# Stale FastDDS shared-memory segments outlive killed nodes and make the next
+# run log "Failed init_port fastrtps_port7000", after which `ros2 param` and
+# `ros2 service` report "Node not found" while topics still flow -- a
+# confusing way to lose an afternoon. Safe now that nothing is running.
 rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null
 
+# The ros2 CLI daemon caches its view of the graph and serves stale node lists
+# after a hard kill. Cheap to restart, and it is what makes `ros2 node list`
+# trustworthy on the next run.
+if command -v ros2 >/dev/null 2>&1; then
+    ros2 daemon stop >/dev/null 2>&1
+fi
+
+# A crash or external kill can still leave the camera wedged -- and a wedged
+# Gemini 335L is silent, not noisy, so it costs an afternoon to diagnose.
+# See camera_usb_reset for why this is a real port reset and not the /sys
+# authorized toggle, which does not work.
+RESET_SCRIPT="$(dirname "$0")/camera_usb_reset"
+if [ -x "$RESET_SCRIPT" ]; then
+    echo "==> resetting camera USB device"
+    sudo "$RESET_SCRIPT" || echo "    (camera reset skipped)"
+fi
+
 echo "==> releasing servos over the bus (belt and braces)"
+BUS_RELEASE=/tmp/kaya_release.py
 cat > "$BUS_RELEASE" <<'PYEOF'
 import sys
 sys.path.insert(0, "/home/orin-nano/ros2_ws/src/kaya/kaya_drive")
