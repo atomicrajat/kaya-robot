@@ -201,6 +201,35 @@ def generate_launch_description():
 
                         'odom_frame': 'odom',
                         'map_frame': 'map',
+                        # Publish TF stamped with the CURRENT time instead of the
+                        # image acquisition time.
+                        #
+                        # Without this, cuVSLAM stamps map -> odom and
+                        # odom -> base_footprint with the camera's frame time, and
+                        # that lag is not small or constant: measured 0.048 s
+                        # median on an idle machine, but 0.406 s median once
+                        # nvblox and Nav2 are running alongside. It scales with
+                        # load, which is exactly backwards from what a control
+                        # loop needs.
+                        #
+                        # Nav2 could not work with it. Every goal died on
+                        # "Transform data too old when converting from map to
+                        # odom", and the way that surfaced was the controller
+                        # announcing "Reached the goal!" and bt_navigator logging
+                        # "Goal succeeded" while the robot never moved. Raising
+                        # transform_tolerance to 0.8 s did not help: the failure
+                        # came back in 51 ms, so that path is not honouring it.
+                        #
+                        # BE HONEST ABOUT WHAT THIS DOES: it does not make the
+                        # pose fresher, it relabels a pose computed from a
+                        # ~0.4 s-old image as current. At this robot's 0.15 m/s
+                        # cap that is ~6 cm of unmodelled latency in the control
+                        # loop. That is an acceptable trade against a stack that
+                        # cannot navigate at all, but it is a trade -- the real
+                        # fix is to cut the latency itself (lighter camera
+                        # config, less GPU contention), and if that lands this
+                        # should go back to false.
+                        'override_publishing_stamp': True,
                         'publish_tf': LaunchConfiguration('publish_odom_tf'),
                         'publish_map_tf': True,
 
