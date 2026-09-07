@@ -67,28 +67,49 @@ def generate_launch_description():
         DeclareLaunchArgument('publish_odom_tf', default_value='true',
                               description='Let cuVSLAM own odom -> base_link. See the TF '
                                           'ownership note below before changing.'),
-        DeclareLaunchArgument('time_domain', default_value='system',
-                              description='Camera timestamp domain: system | global | device. '
-                                          'system is required for navigation -- see below.'),
-        # The driver defaults to 'global', and that default silently breaks
-        # Nav2. cuVSLAM stamps every transform it publishes with the CAMERA's
-        # frame time, so the camera's clock becomes the clock for map -> odom
-        # and odom -> base_footprint. Measured lag behind ROS time:
+        DeclareLaunchArgument('time_domain', default_value='global',
+                              description='Camera timestamp domain: global | system | device. '
+                                          'global is REQUIRED for VIO accuracy -- read the note '
+                                          'below before changing it.'),
+        # 'global' is the camera's HARDWARE clock, and this must stay global.
         #
-        #     time_domain=global   0.879 s median  (image), 0.897 s (map->odom)
-        #     time_domain=system   0.030 s median  (image), 0.048 s (map->odom)
+        # time_domain looks like a timestamp-freshness knob. It is also, and far
+        # more importantly, what decides whether the IMU and the images share a
+        # time base -- and cuVSLAM is a VISUAL-INERTIAL estimator that integrates
+        # a ~200 Hz IMU between 30 Hz frames. Measured on this camera:
         #
-        # The offset under 'global' is nearly constant (min 0.876, median
-        # 0.879), so it is a clock-sync problem, not jitter -- relative timing
-        # is fine, which is why VIO itself never complained. But Nav2 compares
-        # stamps against now, so every SLAM transform failed its tolerance as
-        # "Transform data too old", and that failure surfaced as the controller
-        # announcing "Reached the goal!" without the robot moving.
+        #                image interval std   IMU interval std   IMU max deviation
+        #     global               0.001 ms           0.004 ms            0.015 ms
+        #     system               0.107 ms           5.474 ms           11.374 ms
         #
-        # Measured cost to VIO of switching: none detectable. vo_state stayed 1
-        # and track time was 10.8-15.3 ms, against 11.1 ms on 'global'. The
-        # left/right stereo pair is hardware-synced on the sensor, so both
-        # images still share a stamp whichever domain is used.
+        # The IMU samples every 4.93 ms. Under 'system' its timestamps deviate by
+        # up to 11.4 ms -- more than TWO whole sampling periods. Integrating that
+        # produces rotation and velocity error proportional to how much the robot
+        # is actually moving: invisible at rest, ruinous under motion.
+        #
+        # Measured exactly that way, same robot, same room, same night:
+        #
+        #     global   16.4 m loop   raw VIO drift  1.2%   returned 2.2 cm
+        #     system   8.5-24.6 m    raw VIO drift 14.5-32%
+        #
+        # and stationary under 'system' the robot held 1.4 mm over 94 s. That is
+        # why every static check passed while every driven loop failed.
+        #
+        # WHY IT WAS SET TO 'system' AND HOW THAT WENT WRONG. Under load,
+        # 'global' stamps lagged ROS time by ~0.9 s -- a near-constant CLOCK
+        # OFFSET, not jitter -- and Nav2 rejects stale transforms, reporting the
+        # failure as "Reached the goal!" without moving. Switching to 'system'
+        # fixed Nav2 and silently destroyed VIO accuracy. The commit that made
+        # the change claimed "measured cost to VIO: none detectable, vo_state
+        # stayed 1 and track time was 10.8-15.3 ms" -- but vo_state and track
+        # time measure PERFORMANCE, not ACCURACY. A drifting estimator reports
+        # vo_state=1 at full speed right up until it is metres wrong.
+        #
+        # The right tool for the Nav2 staleness problem is override_stamp:=true,
+        # which republishes TF with the current time and leaves IMU timing alone.
+        # (Since then the point-cloud decimation fix cut real latency from 0.46 s
+        # to 0.028 s, so the offset may no longer bite at all -- verify before
+        # reaching for the override.)
         DeclareLaunchArgument('enable_laser', default_value='false',
                               description='IR dot projector. Off by default -- the pattern is '
                                           'fixed to the CAMERA, so a tracker locks onto dots that '
