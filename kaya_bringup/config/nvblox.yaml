@@ -5,21 +5,26 @@
 # publishes a 2D slice of it for Nav2's costmap. Kaya has no LiDAR, so this
 # is where every obstacle in the costmap comes from.
 #
-# THE HEIGHTS BELOW ARE THE POINT OF THIS FILE. nvblox defaults to slicing
-# 0.0-1.0 m and reporting at 1.0 m, which suits a robot far taller than this
-# one. Kaya stands about 0.19 m to the top of the camera. Left at the
-# defaults it would look for obstacles at 1 m -- sailing straight into chair
-# legs and boxes while flagging tabletops it could drive under.
+# ---------------------------------------------------------------------------
+# THE SLICE HEIGHTS ARE THE POINT OF THIS FILE, AND THEY ARE NOT MEASURED
+# FROM THE FLOOR.
 #
-# Measured geometry it is derived from (kaya.urdf.xacro):
-#   wheel_radius      0.037   base_link sits this far above the floor
-#   footprint_radius  0.160   circle enclosing the truncated-triangle deck
-#   camera            0.1737 above the FLOOR, pitched 4.89 deg NOSE UP
+# nvblox slices in the GLOBAL frame. Our global frame's origin is base_link
+# (cuVSLAM zeroes map there), and base_link sits one wheel radius up:
 #
-# The camera's upward pitch matters here: it sees further across the room but
-# less of the floor immediately ahead, so the near-field blind spot is real.
-# Do not lower esdf_slice_min_height to chase it -- that admits floor noise
-# as phantom obstacles, which is the failure the curriculum warns about.
+#     base_footprint -> base_link  =  0.037 m        (verified live via tf2_echo)
+#
+# So every height below is 37 mm HIGHER off the ground than its number reads.
+# This bit us once already: the previous values were written as though they
+# were floor-referenced ("min 0.05 above the floor plane"), which actually
+# put the floor of the obstacle band at 8.7 cm. Anything shorter than that --
+# a book, a door threshold, a cable bundle, a shoe -- was invisible to the
+# costmap, and with 37 mm wheels that cannot climb, every one of those is a
+# collision.
+#
+# Each value is therefore written as (desired height above FLOOR) - 0.037.
+# If the wheel radius ever changes, all three change.
+# ---------------------------------------------------------------------------
 
 /**:
   ros__parameters:
@@ -35,17 +40,31 @@
     esdf_mode: 2d
 
     static_mapper:
-      # Floor to just over the robot's own height. Anything in this band is
-      # something Kaya would actually hit.
-      #   min 0.05  above the floor plane, so floor noise and the camera's own
-      #             tilt-induced ground return are not marked as obstacles
-      #   max 0.20  a little above the 0.19 m camera top, so overhangs that
-      #             would clip the camera still count
-      esdf_slice_min_height: 0.05
-      esdf_slice_max_height: 0.20
-      # Where the published 2D slice is reported. Mid-body: high enough to
-      # miss floor speckle, low enough to catch low obstacles.
-      esdf_slice_height: 0.10
+      # 0.013 = 0.05 above floor. The obstacle band starts 5 cm off the ground.
+      #
+      # The earlier value (0.05, i.e. 8.7 cm up) carried a warning not to lower
+      # it because doing so would "admit floor noise as phantom obstacles".
+      # That warning was wrong, and it was tested rather than argued: an A/B on
+      # one identical stationary scene, corridor 0.4-1.5 m ahead by +-0.4 m
+      # lateral, 352 observed cells both times --
+      #
+      #     8.7 cm band:  14 cells marked obstacle (4.0%)
+      #     5.0 cm band:  15 cells marked obstacle (4.3%)
+      #
+      # One cell. No floor wedge appeared in the rendered slice either; free
+      # space stayed a clean FOV triangle with compact obstacles at its edges.
+      #
+      # The reason there is no floor noise to admit is the camera pose: it is
+      # mounted at 0.1737 m and pitched 4.89 deg NOSE UP, so it barely images
+      # the near floor in the first place. That same pitch is why the
+      # near-field blind spot below is real and cannot be tuned away here.
+      esdf_slice_min_height: 0.013
+      # 0.163 = 0.20 above floor: a little over the 0.19 m camera top, so
+      # overhangs that would clip the camera still count as obstacles.
+      esdf_slice_max_height: 0.163
+      # 0.063 = 0.10 above floor. Where the published 2D slice is reported --
+      # mid-body: clear of floor speckle, low enough to catch low obstacles.
+      esdf_slice_height: 0.063
 
       # Depth beyond this is not integrated. The Gemini 335L's stereo error
       # grows with distance squared -- our Phase 4 loop-closure work already

@@ -32,7 +32,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (DeclareLaunchArgument, ExecuteProcess,
+                            IncludeLaunchDescription, TimerAction)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
@@ -67,6 +68,13 @@ def generate_launch_description():
         DeclareLaunchArgument('publish_odom_tf', default_value='true',
                               description='Let cuVSLAM own odom -> base_link. See the TF '
                                           'ownership note below before changing.'),
+        DeclareLaunchArgument('auto_reset', default_value='true',
+                              description='Re-zero the tracker once after startup settles. '
+                                          'See the ORIGIN note at the bottom of this file.'),
+        DeclareLaunchArgument('auto_reset_delay_s', default_value='12.0',
+                              description='How long to let tracking stabilise before re-zeroing. '
+                                          'Must outlast the camera driver init (~1.6 s) and the '
+                                          'first seconds of dropped frames; 12 s is comfortable.'),
 
         # ------------------------------------------------------- camera driver
         IncludeLaunchDescription(
@@ -200,5 +208,40 @@ def generate_launch_description():
                     ],
                 ),
             ],
+        ),
+
+        # ------------------------------------------------- ORIGIN: re-zero once
+        # cuVSLAM's origin is wherever the tracker thought it was when it
+        # initialised -- and initialisation is exactly when it is least
+        # trustworthy. MEASURED on this robot, stationary on the floor
+        # throughout: by the time tracking was healthy, map -> base_link read
+        # (0.285, -0.061, -0.360) m with -9.0 deg pitch. The -0.36 m in Z is
+        # the tell; the robot physically cannot descend 36 cm, so that pose was
+        # integrated, not travelled. The log shows frames being dropped over
+        # the same window (repeated "Delta between current and previous frame
+        # [66.7 ms]" against a 34 ms threshold), which is the likely cause.
+        #
+        # This is NOT drift. Once settled, the same tracker held 0.87 cm/min
+        # and 0.05 deg/min stationary, and returned a 16.4 m driven loop to
+        # 2.2 cm / 1.1 deg. The bad pose is a one-off startup artifact.
+        #
+        # Left alone it silently poisons everything downstream, because every
+        # map nvblox builds and every goal Nav2 is given is expressed in this
+        # frame. Resetting once, after tracking has stabilised, costs nothing
+        # and pins the origin to where the robot actually stands.
+        #
+        # Honest scope: one observed occurrence, not a characterised failure
+        # rate. The reset is cheap and correct either way -- if the root cause
+        # turns out to be something else entirely, this still leaves the origin
+        # in the right place. Set auto_reset:=false to observe the raw
+        # behaviour.
+        TimerAction(
+            period=LaunchConfiguration('auto_reset_delay_s'),
+            condition=IfCondition(LaunchConfiguration('auto_reset')),
+            actions=[ExecuteProcess(
+                cmd=['ros2', 'service', 'call', '/visual_slam/reset',
+                     'isaac_ros_visual_slam_interfaces/srv/Reset'],
+                output='screen',
+            )],
         ),
     ])

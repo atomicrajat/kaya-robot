@@ -77,11 +77,19 @@ def generate_launch_description():
             package='nvblox_ros', executable='nvblox_node', name='nvblox_node',
             output='screen',
             parameters=[nvblox_cfg],
+            # The camera_0/ prefix is NOT decoration: nvblox namespaces its
+            # inputs per camera, and num_cameras is 1 here, so camera index 0
+            # is the only one it subscribes to. Remapping the un-prefixed
+            # 'depth/image' silently connects NOTHING -- the node starts, runs,
+            # reports healthy, and logs "Last view not set for sensor type.
+            # Decaying all voxels" forever while the costmap stays empty.
+            # Confirmed against nvblox_ros's own integration tests, which
+            # remap into exactly these names.
             remappings=[
-                ('depth/image', '/camera/depth/image_raw'),
-                ('depth/camera_info', '/camera/depth/camera_info'),
-                ('color/image', '/camera/color/image_raw'),
-                ('color/camera_info', '/camera/color/camera_info'),
+                ('camera_0/depth/image', '/camera/depth/image_raw'),
+                ('camera_0/depth/camera_info', '/camera/depth/camera_info'),
+                ('camera_0/color/image', '/camera/color/image_raw'),
+                ('camera_0/color/camera_info', '/camera/color/camera_info'),
             ],
         ),
 
