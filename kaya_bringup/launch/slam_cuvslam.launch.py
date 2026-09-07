@@ -89,6 +89,13 @@ def generate_launch_description():
         # and track time was 10.8-15.3 ms, against 11.1 ms on 'global'. The
         # left/right stereo pair is hardware-synced on the sensor, so both
         # images still share a stamp whichever domain is used.
+        DeclareLaunchArgument('enable_laser', default_value='false',
+                              description='IR dot projector. Off by default -- the pattern is '
+                                          'fixed to the CAMERA, so a tracker locks onto dots that '
+                                          'never move relative to it and concludes the robot is '
+                                          'stationary. Exposed only because in a dark room there '
+                                          'may be no real features at all, which is worse. See '
+                                          'the note at enable_laser below.'),
         DeclareLaunchArgument('override_stamp', default_value='false',
                               description='Publish TF stamped with current time instead of the '
                                           'image time. Only needed if camera latency regresses '
@@ -118,7 +125,21 @@ def generate_launch_description():
                 'enable_left_ir': 'true',
                 'enable_right_ir': 'true',
                 # See the module docstring -- non-negotiable for stereo VSLAM.
-                'enable_laser': 'false',
+                # OFF by default, and the docstring above explains why. Made
+                # switchable to answer one question empirically: this robot's
+                # VIO tracks on the IR pair, so in a dark room it has almost
+                # nothing to see. Measured with every room light on --
+                #
+                #     projector off   brightness 47   texture  4.6
+                #     projector on    brightness 42   texture 11.8
+                #
+                # -- and a 20 m loop at texture 4.6 drifted 3.03 m, against
+                # 2.2 cm over 16.4 m in daylight. The theoretical objection to
+                # the projector assumes there are real features to corrupt.
+                # Whether 11.8 of camera-fixed texture beats 4.6 of real
+                # texture is a question about this room, not about theory, so
+                # it gets measured rather than argued.
+                'enable_laser': LaunchConfiguration('enable_laser'),
                 'enable_frame_sync': 'true',
                 'time_domain': LaunchConfiguration('time_domain'),
                 # Colour and depth are not used by this route. Leaving them off
