@@ -83,3 +83,29 @@ silhouette and looks like a failed load.
 `three.min.js`, `GLTFLoader.js`, `RoomEnvironment.js` and the `.glb` are all
 vendored under `static/` rather than pulled from a CDN, so the dashboard works
 on a network with no route out — which is the normal case for a robot.
+
+## Staleness is not decoration
+
+The first version of this dashboard reported a confident pose and
+"map frame anchored" for ten minutes after the robot's battery died mid-session.
+A TF buffer hands back the last transform it saw forever, so nothing had to
+fail for the display to become fiction.
+
+That is the same failure this project has now removed twice elsewhere -- a
+health report over a dead source -- so:
+
+- every pose carries `age_s`, and `link` is live / stale / offline;
+- past `stale_after_s` (5 s) the pose reads `null` and `anchored` reads
+  `unknown`, rather than the last thing the robot happened to say;
+- the map greys out under a "ROBOT OFFLINE — last known position" banner, so it
+  cannot be mistaken for telemetry;
+- `POST /api/goal` returns **503** when nothing is subscribed to `/goal_pose`,
+  because publishing into an empty topic succeeds and looks exactly like
+  working. That is precisely what a dead robot looks like from here.
+
+## Placing goals
+
+- **2D:** click to place, drag before releasing to aim the heading.
+- **3D:** click the floor to place, drag to aim; shift-drag or right-drag orbits.
+  The click is raycast onto the ground plane, so goals land where the robot can
+  drive rather than on top of a wall.

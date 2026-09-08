@@ -72,6 +72,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BASE_MAP = os.path.expanduser(
     '~/work_projects/kaya_robot/robot_maps/home_final/home_2d')
 PORT = int(os.environ.get('KAYA_DASH_PORT', '8080'))
+# Beyond this the robot is treated as gone, not merely quiet.
+STALE_S = 5.0
 
 # Latched publishers (costmaps, the anchor verdict) are TRANSIENT_LOCAL; asking
 # for VOLATILE here would connect to nothing and show an empty dashboard while
@@ -168,6 +170,15 @@ class Dash(Node):
     # --------------------------------------------------------------- queries
 
     def pose(self):
+        """Pose AND how old it is.
+
+        A TF buffer keeps handing back the last transform it saw, forever. When
+        the robot's battery died mid-session this dashboard went on reporting a
+        confident pose and "map frame anchored" for a machine that had been off
+        the network for minutes -- the same trap as a tracker reporting
+        vo_state=1 while drifting metres. Nothing here may be shown without its
+        age beside it.
+        """
         try:
             t = self.tf_buffer.lookup_transform('map', 'base_footprint', Time())
         except tf2_ros.TransformException:
@@ -175,7 +186,9 @@ class Dash(Node):
         tr, q = t.transform.translation, t.transform.rotation
         yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
                          1 - 2 * (q.y * q.y + q.z * q.z))
-        return {'x': tr.x, 'y': tr.y, 'z': tr.z, 'yaw': yaw}
+        stamp = Time.from_msg(t.header.stamp).nanoseconds
+        age = (self.get_clock().now().nanoseconds - stamp) / 1e9
+        return {'x': tr.x, 'y': tr.y, 'z': tr.z, 'yaw': yaw, 'age_s': age}
 
     def send_goal(self, x, y, yaw):
         g = PoseStamped()
@@ -213,11 +226,23 @@ def make_handler(node):
                     self._send(200, f.read(), 'text/html; charset=utf-8')
             elif path == '/api/state':
                 with node.lock:
+                    pose = node.pose()
+                    # Anything the robot published is only as good as the last
+                    # time it published anything at all.
+                    age = pose['age_s'] if pose else None
+                    link = ('offline' if age is None or age > STALE_S
+                            else 'stale' if age > 1.5 else 'live')
                     body = {
-                        'pose': node.pose(),
+                        'pose': pose,
+                        'link': link,
+                        'stale_after_s': STALE_S,
                         'vio': node.vio,
                         'vio_available': HAVE_VSLAM_MSGS,
-                        'anchored': node.anchored,
+                        # A goal published to nobody goes nowhere and reports
+                        # no error, which is exactly what it looks like when
+                        # the robot has quietly gone away.
+                        'goal_subscribers': node.goal_pub.get_subscription_count(),
+                        'anchored': node.anchored if link != 'offline' else None,
                         'costmap': node.costmap,
                         'base': ({k: v for k, v in node.base.items() if k != 'png'}
                                  if node.base else None),
@@ -253,6 +278,15 @@ def make_handler(node):
             n = int(self.headers.get('Content-Length', 0))
             req = json.loads(self.rfile.read(n) or b'{}')
             if self.path == '/api/goal':
+                n_sub = node.goal_pub.get_subscription_count()
+                if n_sub == 0:
+                    # Publishing anyway would look identical to success.
+                    self._send(503, json.dumps({
+                        'ok': False,
+                        'error': 'nothing is subscribed to /goal_pose. Nav2 is '
+                                 'not running, or the robot is off the network.',
+                    }).encode(), 'application/json')
+                    return
                 node.send_goal(req['x'], req['y'], req.get('yaw', 0.0))
                 self._send(200, json.dumps({'ok': True}).encode(),
                            'application/json')
