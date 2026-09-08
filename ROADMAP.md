@@ -273,11 +273,13 @@ In order. Stop at the first failure rather than pressing on.
 
 2. **Re-verify the map still loads** (it was saved and tested once)
 
-       ros2 launch kaya_bringup nav.launch.py \
+       tools/kaya_run.sh start \
          map_path:=/home/orin-nano/kaya_maps/home_final/cuvslam \
          hint_x:=3.0 hint_y:=-4.0
 
-   Expect relocalisation to within ~10 cm despite the deliberately wrong hint.
+   Expect relocalisation to within ~10 cm despite the deliberately wrong hint —
+   **in daylight**. See "relocalisation is illumination-specific" below; run
+   this one in the afternoon, as the map was built at 15:24.
 
 3. **Navigate to two or three different points** on the saved map, including
    one in another room. Everything so far has been short hops in open space;
@@ -287,6 +289,37 @@ In order. Stop at the first failure rather than pressing on.
    run. Read `odom -> base_footprint`, not the corrected pose.
 
 5. **Then start Phase 8** (Foxglove), which needs no driving and little battery.
+
+### Relocalisation is illumination-specific
+
+Measured 2026-09-08, robot on its marked spot at the saved map's origin, at
+21:00 against a map built the same afternoon at 15:24:
+
+| hint error | afternoon | that night |
+|---|---|---|
+| 0 m | — | localizes, 1-2 cm |
+| 2.0 m | — | localizes, 2.3 cm |
+| 3.5 m | — | localizes, 1.5 cm |
+| 5.0 m | **5.9 cm** | **fails** |
+
+Nothing in the stack changed between those runs; the room did. The overhead
+lamp was on as usual, but the daylight through the window was gone, and IR
+texture measured **4.33** against ~11.8 for a scene with usable features and
+~4.6 for the dark room in `tools/README.md`. Relocalisation was matching a
+daytime map against a night scene: enough features left to confirm a pose it is
+already near, not enough to search 5 m for one.
+
+So the recovery radius is not a fixed property of the map — it shrinks as the
+match weakens. Two consequences worth carrying into later phases:
+
+- **A wrong-hint test is a lighting test as much as a mapping test.** Run it in
+  conditions resembling the mapping run, or expect to be misled.
+- **Phase 9 keyframes inherit this.** A keyframe store built in daylight will
+  answer daytime questions best. Worth mapping the same space more than once,
+  at different times of day, rather than treating one map as canonical.
+
+Turning `enable_laser` on does not rescue it: the projector's dots are fixed to
+the camera and absent from the saved map, so they add texture that cannot match.
 
 ### Practical notes
 

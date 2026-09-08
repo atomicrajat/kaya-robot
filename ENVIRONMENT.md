@@ -20,7 +20,7 @@ machine.
 | project | `~/work_projects/kaya_robot` | `~/ros2_ws/src/kaya` |
 | OS | Ubuntu 24.04.4, kernel 7.0.0-30 | JetPack 7.2.1 (L4T R39) |
 | GPU | RTX 5090 Laptop, **24 GB** | Orin Nano 8 GB, no DLA |
-| ROS | Jazzy at `/opt/ros/jazzy` | Humble |
+| ROS | Jazzy at `/opt/ros/jazzy` | Jazzy at `/opt/ros/jazzy` |
 
 The path is `work_projects` — plural, with an underscore. Not `~/work/`, which
 is where it lived on the Mac.
@@ -57,10 +57,11 @@ link.
 
   This is genuinely new capability — the Mac had no ROS at all. Anything that
   used to mean "ssh in and run it on the robot" can now run here: `rviz2`,
-  `ros2 topic echo` against the robot's Humble stack over the LAN, and the
-  Phase 8 dashboard work. Note the version gap: **Jazzy here, Humble on the
-  robot.** They interoperate over DDS for standard message types, but do not
-  expect to build the robot's packages here unmodified.
+  `ros2 topic echo` against the robot over the LAN, and the Phase 8 dashboard
+  work. **Both machines run Jazzy** — an earlier draft of this file said Humble
+  on the robot, which is wrong; `/opt/ros` there holds `jazzy` and nothing else,
+  and the robot's shells do not source it automatically, so every command over
+  ssh needs `source /opt/ros/jazzy/setup.bash` first.
 
 - **`rsync` from the Mac to here does not work.** macOS ships openrsync, which
   fails against Ubuntu's rsync 3.2.7 while parsing exclude rules
