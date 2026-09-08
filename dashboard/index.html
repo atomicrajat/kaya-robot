@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaya</title>
+<style>
+  :root {
+    --bg: #0f1418; --panel: #161d23; --line: #263038;
+    --ink: #e6edf3; --dim: #8b9aa7; --accent: #4fc3f7;
+    --ok: #66bb6a; --bad: #ef5350; --warn: #ffa726;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+  .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px;
+          border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+  .pill b { color: var(--ink); font-weight: 600; }
+  .pill.ok { border-color: #2e7d32; color: var(--ok); }
+  .pill.bad { border-color: #b71c1c; color: var(--bad); }
+  main { display: grid; grid-template-columns: 1fr 320px; gap: 12px; padding: 12px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          overflow: hidden; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .8px;
+             color: var(--dim); margin: 0; padding: 9px 12px;
+             border-bottom: 1px solid var(--line); display: flex;
+             justify-content: space-between; align-items: center; }
+  .tabs { display: flex; gap: 6px; }
+  .tab { font-size: 11px; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+         border: 1px solid var(--line); color: var(--dim); background: transparent; }
+  .tab.on { color: var(--ink); border-color: var(--accent); }
+  #view { position: relative; height: min(70vh, 680px); background: #0b0f12; }
+  #map2d, #view3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #view3d { display: none; }
+  .hint { position: absolute; left: 10px; bottom: 10px; font-size: 12px;
+          color: var(--dim); background: rgba(11,15,18,.85); padding: 5px 10px;
+          border-radius: 6px; border: 1px solid var(--line); }
+  .rows { padding: 10px 12px; }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0;
+         font-variant-numeric: tabular-nums; }
+  .row span:first-child { color: var(--dim); }
+  form { display: flex; gap: 8px; padding: 10px 12px; }
+  input[type=text] { flex: 1; min-width: 0; background: #0b0f12; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font: inherit; }
+  button { background: var(--accent); color: #06232e; border: 0; border-radius: 7px;
+           padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
+  .note { padding: 0 12px 12px; color: var(--dim); font-size: 12px; }
+  .err { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Kaya</h1>
+  <span class="pill" id="p-conn">connecting…</span>
+  <span class="pill" id="p-anchor">map frame —</span>
+  <span class="pill" id="p-vio">VIO —</span>
+  <span class="pill" id="p-pose">pose —</span>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Map
+      <span class="tabs">
+        <button class="tab on" data-view="2d">2D</button>
+        <button class="tab" data-view="3d">3D</button>
+      </span>
+    </h2>
+    <div id="view">
+      <canvas id="map2d"></canvas>
+      <div id="view3d"></div>
+      <div class="hint" id="hint">click to set a goal · drag to aim heading</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card" style="margin-bottom:12px">
+      <h2>Ask</h2>
+      <form id="askform">
+        <input type="text" id="q" placeholder="show me where I can cook">
+        <button type="submit">Go</button>
+      </form>
+      <div class="note" id="askout">
+        Phase 10. Needs the keyframe store (Phase 9) first — the button is wired
+        to the endpoint that will answer it.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Status</h2>
+      <div class="rows" id="status"></div>
+      <div class="note">
+        Base layer is the saved 202 m² map. Red is what Nav2 sees as blocked
+        right now, including obstacles that were not there when the map was
+        built.
+      </div>
+      <div class="rows"><button class="ghost" id="cancel">Clear goal marker</button></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let state = null, baseImg = null, costImg = null, goal = null;
+let drag = null;               // {x, y} in map metres while aiming a heading
+let view = { scale: 1, ox: 0, oy: 0 };   // map metres -> canvas px
+
+function fitView(canvas) {
+  // Fit the BASE map, so the frame never jumps around as the live costmap
+  // window follows the robot.
+  const b = state && state.base;
+  if (!b) return;
+  const w = b.width * b.resolution, h = b.height * b.resolution;
+  const pad = 20;
+  const s = Math.min((canvas.width - 2 * pad) / w, (canvas.height - 2 * pad) / h);
+  view.scale = s;
+  view.ox = (canvas.width - w * s) / 2 - b.origin_x * s;
+  view.oy = (canvas.height + h * s) / 2 + b.origin_y * s;
+}
+const toPx = (x, y) => [view.ox + x * view.scale, view.oy - y * view.scale];
+const toMap = (px, py) => [(px - view.ox) / view.scale, (view.oy - py) / view.scale];
+
+function drawGrid(ctx, c) {
+  const b = state.base;
+  if (!b) return;
+  ctx.save();
+  ctx.strokeStyle = '#1b242b'; ctx.lineWidth = 1;
+  const x0 = Math.floor(b.origin_x), x1 = Math.ceil(b.origin_x + b.width * b.resolution);
+  const y0 = Math.floor(b.origin_y), y1 = Math.ceil(b.origin_y + b.height * b.resolution);
+  for (let x = x0; x <= x1; x++) { const [a] = toPx(x, 0); ctx.beginPath(); ctx.moveTo(a, 0); ctx.lineTo(a, c.height); ctx.stroke(); }
+  for (let y = y0; y <= y1; y++) { const [, a] = toPx(0, y); ctx.beginPath(); ctx.moveTo(0, a); ctx.lineTo(c.width, a); ctx.stroke(); }
+  ctx.restore();
+}
+
+function drawLayer(ctx, img, meta) {
+  if (!img || !img.complete || !meta) return;
+  const w = meta.width * meta.resolution, h = meta.height * meta.resolution;
+  const [px, py] = toPx(meta.origin_x, meta.origin_y + h);
+  ctx.drawImage(img, px, py, w * view.scale, h * view.scale);
+}
+
+function drawRobot(ctx) {
+  if (!state || !state.pose) return;
+  const p = state.pose, [x, y] = toPx(p.x, p.y);
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(-p.yaw);
+  ctx.fillStyle = '#4fc3f7';
+  ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-9, 8); ctx.lineTo(-9, -8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(79,195,247,.5)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, 16, 0, 7); ctx.stroke();
+}
+
+function drawGoal(ctx) {
+  const g = drag || goal;
+  if (!g) return;
+  const [x, y] = toPx(g.x, g.y);
+  ctx.save();
+  ctx.strokeStyle = '#66bb6a'; ctx.fillStyle = '#66bb6a'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.stroke();
+  if (g.yaw !== undefined) {
+    ctx.translate(x, y); ctx.rotate(-g.yaw);
+    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(26, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(19, 5); ctx.lineTo(19, -5); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function render() {
+  const c = $('#map2d'), r = c.getBoundingClientRect();
+  if (c.width !== r.width || c.height !== r.height) { c.width = r.width; c.height = r.height; }
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (!state || !state.base) {
+    ctx.fillStyle = '#8b9aa7'; ctx.font = '13px sans-serif';
+    ctx.fillText('waiting for map…', 16, 26);
+    return;
+  }
+  fitView(c);
+  drawGrid(ctx, c);
+  ctx.imageSmoothingEnabled = false;
+  drawLayer(ctx, baseImg, state.base);
+  drawLayer(ctx, costImg, state.costmap);
+  drawGoal(ctx);
+  drawRobot(ctx);
+}
+
+// ---------------------------------------------------------------- click goal
+const cv = $('#map2d');
+let down = null;
+cv.addEventListener('mousedown', e => {
+  const r = cv.getBoundingClientRect();
+  const [x, y] = toMap(e.clientX - r.left, e.clientY - r.top);
+  down = { x, y }; drag = { x, y, yaw: 0 }; render();
+});
+cv.addEventListener('mousemove', e => {
+  if (!down) return;
+  const r = cv.getBoundingClientRect();
+  const [x, y] = toMap(e.clientX - r.left, e.clientY - r.top);
+  drag = { x: down.x, y: down.y, yaw: Math.atan2(y - down.y, x - down.x) };
+  render();
+});
+cv.addEventListener('mouseup', async () => {
+  if (!down) return;
+  const g = drag; down = null; drag = null; goal = g; render();
+  $('#hint').textContent = 'sending goal…';
+  try {
+    await fetch('/api/goal', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(g) });
+    $('#hint').textContent = `goal sent: (${g.x.toFixed(2)}, ${g.y.toFixed(2)})`;
+  } catch (err) {
+    $('#hint').innerHTML = '<span class="err">goal failed to send</span>';
+  }
+});
+$('#cancel').onclick = () => { goal = null; render();
+  $('#hint').textContent = 'click to set a goal · drag to aim heading'; };
+
+// -------------------------------------------------------------------- panels
+function pill(el, text, cls) {
+  el.innerHTML = text; el.className = 'pill' + (cls ? ' ' + cls : '');
+}
+function paint() {
+  if (!state) return;
+  pill($('#p-conn'), 'connected', 'ok');
+  const a = state.anchored;
+  pill($('#p-anchor'), 'map frame <b>' + (a === null ? 'unknown' : a ? 'anchored' : 'NOT anchored') + '</b>',
+       a === null ? '' : a ? 'ok' : 'bad');
+  if (state.vio) {
+    const v = state.vio;
+    pill($('#p-vio'), `VIO <b>${v.track_ms.toFixed(1)} ms</b>`, v.vo_state === 1 ? 'ok' : 'bad');
+  } else if (state.vio_available === false) {
+    pill($('#p-vio'), 'VIO <b>n/a here</b>');
+    $('#p-vio').title = 'isaac_ros_visual_slam_interfaces is installed only on '
+      + 'the robot, so this figure cannot be read from the workstation. '
+      + 'Check it on the robot rather than trusting a substitute.';
+  }
+  if (state.pose) {
+    const p = state.pose;
+    pill($('#p-pose'), `<b>${p.x.toFixed(2)}, ${p.y.toFixed(2)}</b> m · ${(p.yaw * 57.2958).toFixed(0)}°`);
+  }
+  const rows = [];
+  if (state.pose) {
+    rows.push(['x', state.pose.x.toFixed(3) + ' m'], ['y', state.pose.y.toFixed(3) + ' m'],
+              ['z', state.pose.z.toFixed(3) + ' m'],
+              ['yaw', (state.pose.yaw * 57.2958).toFixed(1) + '°']);
+  }
+  if (state.vio) rows.push(['track time', state.vio.track_ms.toFixed(2) + ' ms'],
+                           ['vo_state', state.vio.vo_state]);
+  if (goal) rows.push(['goal', `${goal.x.toFixed(2)}, ${goal.y.toFixed(2)}`]);
+  $('#status').innerHTML = rows.map(([k, v]) => `<div class="row"><span>${k}</span><span>${v}</span></div>`).join('');
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/api/state');
+    state = await r.json();
+    if (!baseImg && state.base) { baseImg = new Image(); baseImg.onload = render; baseImg.src = '/api/base.png'; }
+    if (state.costmap) { const i = new Image(); i.onload = () => { costImg = i; render(); }; i.src = '/api/costmap.png?t=' + Date.now(); }
+    paint(); render();
+  } catch (e) {
+    pill($('#p-conn'), 'backend unreachable', 'bad');
+  }
+}
+setInterval(poll, 500);
+poll();
+window.addEventListener('resize', render);
+
+// ------------------------------------------------------------------- 3D view
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  const is3d = t.dataset.view === '3d';
+  $('#view3d').style.display = is3d ? 'block' : 'none';
+  $('#map2d').style.display = is3d ? 'none' : 'block';
+  $('#hint').style.display = is3d ? 'none' : 'block';
+  if (is3d) init3d();
+  else render();
+});
+
+let three = null;
+function init3d() {
+  if (three || !state || !state.base) return;
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js';
+  s.onload = () => build3d();
+  s.onerror = () => { $('#view3d').innerHTML =
+    '<div class="hint" style="position:static;margin:16px">3D needs three.js from the CDN, which this machine could not reach.</div>'; };
+  document.head.appendChild(s);
+}
+
+function build3d() {
+  // Walls are extruded from the SAME base map the 2D view draws, so the two
+  // views cannot disagree. The nvblox .ply mesh is 42 MB and is not worth
+  // shipping to a browser just to see room shape.
+  const b = state.base, host = $('#view3d');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0f12);
+  const cam = new THREE.PerspectiveCamera(55, host.clientWidth / host.clientHeight, 0.1, 200);
+  const rend = new THREE.WebGLRenderer({ antialias: true });
+  rend.setSize(host.clientWidth, host.clientHeight);
+  host.innerHTML = ''; host.appendChild(rend.domElement);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(5, 10, 7); scene.add(dir);
+
+  const cnv = document.createElement('canvas');
+  cnv.width = b.width; cnv.height = b.height;
+  const g = cnv.getContext('2d');
+  g.drawImage(baseImg, 0, 0);
+  const px = g.getImageData(0, 0, b.width, b.height).data;
+  const wall = new THREE.BoxGeometry(b.resolution, 0.9, b.resolution);
+  const mat = new THREE.MeshLambertMaterial({ color: 0x5b6b78 });
+  const cells = [];
+  for (let j = 0; j < b.height; j++) {
+    for (let i = 0; i < b.width; i++) {
+      if (px[(j * b.width + i) * 4] < 100) {     // dark = occupied in a .pgm
+        cells.push([b.origin_x + i * b.resolution,
+                    b.origin_y + (b.height - 1 - j) * b.resolution]);
+      }
+    }
+  }
+  const mesh = new THREE.InstancedMesh(wall, mat, cells.length);
+  const m4 = new THREE.Matrix4();
+  cells.forEach(([x, y], k) => { m4.makeTranslation(x, 0.45, -y); mesh.setMatrixAt(k, m4); });
+  scene.add(mesh);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60),
+    new THREE.MeshLambertMaterial({ color: 0x11181d }));
+  floor.rotation.x = -Math.PI / 2; scene.add(floor);
+  const bot = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.42, 12),
+    new THREE.MeshLambertMaterial({ color: 0x4fc3f7 }));
+  bot.rotation.x = Math.PI / 2; scene.add(bot);
+
+  let ang = 0.7, dist = 14, tilt = 0.85, dragging = null;
+  rend.domElement.onmousedown = e => dragging = { x: e.clientX, y: e.clientY, a: ang, t: tilt };
+  window.addEventListener('mouseup', () => dragging = null);
+  rend.domElement.onmousemove = e => {
+    if (!dragging) return;
+    ang = dragging.a + (e.clientX - dragging.x) * 0.008;
+    tilt = Math.max(0.15, Math.min(1.5, dragging.t + (e.clientY - dragging.y) * 0.005));
+  };
+  rend.domElement.onwheel = e => { e.preventDefault(); dist = Math.max(3, Math.min(45, dist + e.deltaY * 0.02)); };
+
+  (function loop() {
+    three = true;
+    const p = state && state.pose ? state.pose : { x: 0, y: 0, yaw: 0 };
+    bot.position.set(p.x, 0.21, -p.y);
+    const cx = p.x + Math.cos(ang) * dist * Math.cos(tilt);
+    const cz = -p.y + Math.sin(ang) * dist * Math.cos(tilt);
+    cam.position.set(cx, dist * Math.sin(tilt) + 1, cz);
+    cam.lookAt(p.x, 0, -p.y);
+    rend.render(scene, cam);
+    requestAnimationFrame(loop);
+  })();
+}
+
+// ----------------------------------------------------------------- ask (P10)
+$('#askform').onsubmit = async e => {
+  e.preventDefault();
+  const q = $('#q').value.trim(); if (!q) return;
+  $('#askout').textContent = 'asking…';
+  const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ q }) });
+  const j = await r.json();
+  $('#askout').innerHTML = r.ok ? JSON.stringify(j) : '<span class="err">' + j.error + '</span>';
+};
+</script>
+</body>
+</html>
