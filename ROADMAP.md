@@ -33,83 +33,90 @@ below builds on top of it and does not require touching it.
 
 ## What "show me where I can cook" actually requires
 
-Four pieces, only one of which is genuinely new work.
+### The approach: remember scenes, let a reasoning model choose
 
-### 1. Semantic layer: what is where
+The map today is pure geometry — it knows a wall is at (3.2, -1.4), not that it
+is a kitchen. The gap is filled by remembering *what places looked like*, and
+asking a reasoning model which one matches the request.
 
-The map today is pure geometry — it knows a wall is at (3.2, -1.4) but not that
-it is a kitchen. The gap is filled by detecting objects and recording where
-they are.
+    while mapping:   keyframe image + its map pose   ->  a few hundred JPEGs
+    on a question:   "where can I cook?" + candidates ->  model picks one
+                     -> navigate to that keyframe's pose
 
-    colour frame -> YOLOv8 -> bounding boxes
-                            -> depth at box centre -> 3D point (camera frame)
-                            -> TF (map <- camera)  -> 3D point (MAP frame)
-                            -> semantic database
+This is deliberately chosen over the obvious alternative of running object
+detection and rebuilding meaning from class labels. Both were considered:
 
-`isaac_ros_yolov8` is **already installed**, along with `isaac_ros_tensor_rt`
-and the DNN encoder. Nothing new to build; it needs wiring to depth and TF.
+| | object detection | keyframes + reasoning model |
+|---|---|---|
+| Jetson cost | YOLO at 1-2 Hz, competes for GPU | saving JPEGs, nearly free |
+| vocabulary | COCO's 80 fixed classes | anything describable |
+| "somewhere to read" | impossible | works |
+| "where can I cook" | infer from oven + fridge | sees a kitchen |
+| new code on robot | detect -> depth -> TF -> cluster | an image writer |
 
-**Why COCO is enough.** YOLOv8's default 80 classes include `oven`, `sink`,
-`refrigerator`, `microwave`, `toaster`, `dining table`, `toilet`, `bed`,
-`couch`, `tv`, `chair`, `potted plant`. Those map onto rooms almost directly:
+COCO cannot represent "a cosy corner to read in" or "somewhere to put this
+down". A model that looks at the scene can. The heavy lifting also moves off
+the robot, which is what makes it affordable at all.
 
-| observed objects | inferred place |
-|---|---|
-| oven, refrigerator, microwave, sink | kitchen |
-| toilet, sink | bathroom |
-| bed | bedroom |
-| couch, tv | living room |
-| dining table, chairs | dining area |
+### Where the reasoning model runs
 
-So "where can I cook" resolves without any custom training. A custom model is
-only needed for objects COCO does not know, and that is a later refinement.
+**Not on the Jetson.** NVIDIA Cosmos 3 — the natural fit conceptually, being a
+reasoning VLM built for physical AI — ships as Nano at 16B parameters
+(positioned for workstation inference) and Super at 64B (datacenter). At 16B
+even INT4 quantisation is roughly 8 GB, which is the entire board, and the
+navigation stack already holds 3.7 GB. This is not a close call.
 
-**Storage.** A small SQLite database, one row per detected object instance:
+Options, in order of practicality:
 
-    class, x, y, z, confidence, n_observations, first_seen, last_seen
+1. **Cloud vision model (recommended to start).** Send the question and a
+   shortlist of keyframes, get back a choice. No Jetson cost, no deployment,
+   easy to iterate. Needs wifi at query time, which the robot has.
+2. **Cosmos 3 Nano on a workstation.** If a machine with enough VRAM is
+   available, this is the closest thing to what was envisioned, and keeps
+   everything on the local network.
+3. **A small VLM on the Jetson (2-3B, quantised).** Only worth it if the robot
+   must answer with no network at all. Expect it to be slow and to compete with
+   navigation for memory.
 
-Repeated detections of the same physical object get clustered by proximity, so
-the fridge seen forty times becomes one row with high confidence rather than
-forty rows. Objects seen once and never again decay in confidence — which is
-also how the robot notices something has moved.
+The robot side is identical in all three — it stores keyframes and executes a
+goal. Swapping the model is a configuration change, not a rebuild.
 
-### 2. Language: question -> target
+### Keeping the candidate set small
 
-"Where can I cook" -> the concept of cooking -> `oven`/`stove`/`sink` -> look
-up those rows -> take the centroid -> send a Nav2 goal.
+A few hundred keyframes is too many to send to any model per question. Narrow
+first, cheaply:
 
-Two options, and the first is strongly preferred to start:
+- **Spatial thinning.** Keep one keyframe per ~1 m of travel and per ~45 deg of
+  heading change. A 200 m^2 space needs a few hundred, not thousands.
+- **Embedding pre-filter.** A small local image-text model (CLIP-class, well
+  within the Jetson's budget) scores every keyframe against the question and
+  passes only the top handful to the reasoning model. This is the piece that
+  makes the whole thing scale, and it can run in the background as the
+  user suggested — it does not need to be fast.
 
-- **Cloud LLM (recommended).** The robot is on wifi. One API call turns the
-  question into a set of target classes. Costs nothing in Jetson resources,
-  handles phrasing the robot has never seen, and is trivial to iterate on.
-- **Local small model.** A 1-3B quantised model runs on Orin Nano but slowly
-  and in competition with the navigation stack for the 8 GB. Worth doing only
-  if offline operation becomes a requirement.
+### Memory and events
 
-A hardcoded keyword table would also work for a demo, but it breaks the moment
-you phrase something differently, which is the whole point of asking in words.
+Keyframes are timestamped and pose-tagged, so the same store answers "when did
+you last see..." and "has anything changed in the kitchen". Worth a separate
+events table for things worth remembering rather than every frame.
 
-### 3. Memory and events
+### Object detection: still useful later
 
-The same database, with time. Every detection is already timestamped, so
-"when did you last see my keys" and "has anyone been in the kitchen today" fall
-out of the same table. Worth keeping a separate `events` table for things
-worth remembering rather than every frame's detections.
+Not abandoned, just not first. `isaac_ros_yolov8` is already installed, and
+object positions in map coordinates are the right tool for precise targets —
+"go to the fridge" rather than "go to the kitchen". It layers on top of the
+keyframe store rather than replacing it.
 
-### 4. Web dashboard
+### Web dashboard
 
 Two stages:
 
 - **Now, nearly free:** `foxglove_bridge` is already installed. Foxglove Studio
   runs on the Mac, shows the live map and robot position, and its 3D panel can
-  publish a goal where you click. Measured cost when idle: none. This delivers
-  the "live map view and live bot location" half immediately.
+  publish a goal where you click. Measured cost when idle: none.
 - **Later:** a small custom web app for the chat interface — a text box that
-  hits the language layer, plus the map view. Foxglove cannot host the
+  hits the reasoning layer, plus the map view. Foxglove cannot host the
   question-asking part.
-
----
 
 ## Running this on an Orin Nano 8 GB
 
@@ -149,30 +156,37 @@ connected client streaming mesh and pointcloud topics — untested so far.
 
 **Done when:** you can click a point on the map and the robot drives there.
 
-### Phase 9 — Object detection into the map (the core new work)
-Wire `isaac_ros_yolov8` to the colour stream, project detections through depth
-and TF into map coordinates, write to SQLite, cluster repeats. Publish
-detections as markers so they are visible in Foxglove.
+### Phase 9 — Keyframe memory (the core new work, and it is small)
+While driving, save a colour keyframe plus its map pose whenever the robot has
+moved ~1 m or turned ~45 deg. Store as JPEG plus a JSON index. Nothing else on
+the robot changes.
 
-**Done when:** driving through the kitchen puts a `refrigerator` row in the
-database at roughly the right coordinates, and it survives a restart.
+**Done when:** a mapping run leaves a few hundred pose-tagged images on disk,
+and they survive a restart.
 
-**Watch for:** GPU contention. Verify raw VIO drift on a driven loop is still
-under ~1%.
+**Watch for:** almost nothing. Writing JPEGs is cheap. Still re-check raw VIO
+drift on a driven loop, because this project has twice been surprised by a
+change that looked free.
 
-### Phase 10 — Places from objects
-Cluster object positions into regions and label them from their contents
-(oven + fridge + sink -> kitchen). Expose a lookup: name -> coordinates.
-
-**Done when:** the robot can answer "where is the kitchen" with a coordinate,
-and drive there on command.
-
-### Phase 11 — Ask in words
-Language layer: question -> target classes -> database lookup -> Nav2 goal.
-Cloud LLM to start. Add the chat box to the dashboard.
+### Phase 10 — Ask in words
+Query path: question -> shortlist keyframes -> reasoning model picks one ->
+send its pose as a Nav2 goal. Cloud vision model to start; a CLIP-class local
+pre-filter to keep the shortlist small once there are many keyframes.
 
 **Done when:** "show me where I can cook" drives the robot to the kitchen, and
 "take me to the washbasin" drives it to the sink.
+
+**Note:** this is the phase that proves the whole idea, and it needs no new
+robot capability — only the keyframes from Phase 9 and the navigation that
+already works.
+
+### Phase 11 — Objects, for precise targets
+Now add `isaac_ros_yolov8`: detections projected through depth and TF into map
+coordinates, stored alongside the keyframes. This is what turns "go to the
+kitchen" into "go to the fridge".
+
+**Watch for:** GPU contention — this is the first phase that genuinely competes
+with cuVSLAM. Verify raw VIO drift on a driven loop stays under ~1%.
 
 ### Phase 12 — Memory and events
 Event table, decay of stale objects, time-aware queries. "When did you last
