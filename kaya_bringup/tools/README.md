@@ -27,6 +27,18 @@ departure is drift you can trust.
 Nav2 rejects stale transforms and reports the failure as "Reached the goal!",
 so this is worth checking before believing a navigation result.
 
+`kaya_run.sh` -- start and stop the stack so that stopping ACTUALLY stops it.
+`ros2 launch` spawns the composable-node containers as separate processes, so
+killing the launch process orphans them, silently. Ten orphaned nvblox_node
+processes at ~800 MB each filled this 7.5 GB board, took available memory to
+54 MB and load average to 49 -- at which point cuVSLAM stopped reporting
+localization outcomes at all and relocalisation returned a confident pose 2.4 m
+from truth. Both looked like cuVSLAM bugs and neither was. Launches into its own
+session and signals the whole process group.
+
+    ./tools/kaya_run.sh start map_path:=... hint_x:=0.0
+    ./tools/kaya_run.sh stop
+
 `slice_render.py` -- renders nvblox's costmap slice as ASCII around the
 ROBOT'S ACTUAL POSE, looked up from TF. An earlier version assumed the robot
 sat at map (0,0) and reported "0 observed cells" -- indistinguishable from a

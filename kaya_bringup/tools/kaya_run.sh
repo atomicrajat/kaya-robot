@@ -1,0 +1,40 @@
+#!/bin/bash
+# Start/stop the stack so that STOPPING ACTUALLY STOPS IT.
+#
+# `ros2 launch` spawns composable-node containers as separate processes. Killing
+# only the launch process orphans them, and they are not small: ten orphaned
+# nvblox_node processes at ~800 MB each filled this 7.5 GB board and drove load
+# average to 49, which then looked like cuVSLAM hanging. Launch into its own
+# session so the whole process group can be signalled as one.
+LOG=${LOG:-$HOME/kaya_run.log}
+PGF=$HOME/.kaya_run.pgid
+
+start() {
+  stop
+  rm -f "$LOG"
+  setsid nohup bash -c "source /opt/ros/jazzy/setup.bash && \
+    source $HOME/ros2_ws/install/setup.bash && \
+    exec ros2 launch kaya_bringup nav.launch.py $*" > "$LOG" 2>&1 < /dev/null &
+  echo $! > "$PGF"
+  echo "started pgid $(cat $PGF), log $LOG"
+}
+
+stop() {
+  if [ -f "$PGF" ]; then
+    kill -TERM -"$(cat $PGF)" 2>/dev/null
+    sleep 5
+    kill -9 -"$(cat $PGF)" 2>/dev/null
+    rm -f "$PGF"
+  fi
+  # Belt and braces: anything left from an earlier, less careful session.
+  pids=$(pgrep -f "nvblox|component_container|cuvslam_origin_anchor|kaya_bringup nav.launch" | tr "\n" " ")
+  [ -n "$pids" ] && kill -9 $pids 2>/dev/null
+  sleep 2
+  echo "stopped; $(free -m | awk "/^Mem:/ {print \$7\" MB available\"}")"
+}
+
+case "$1" in
+  start) shift; start "$@" ;;
+  stop) stop ;;
+  *) echo "usage: kaya_run.sh start [launch args...] | stop"; exit 1 ;;
+esac
