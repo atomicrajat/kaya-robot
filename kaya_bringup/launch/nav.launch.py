@@ -95,6 +95,17 @@ def generate_launch_description():
                                           'the robot. Leave false to navigate, which uses '
                                           'dynamic mapping so people are not fused in as walls. '
                                           'See config/nvblox_mapping.yaml.'),
+        DeclareLaunchArgument('nvblox_map', default_value='',
+                              description='A saved .nvblx volume to reload, so the costmap holds '
+                                          'the whole space instead of only what the camera has '
+                                          'seen this run. This is SEPARATE from map_path: that '
+                                          "loads cuVSLAM's relocalisation database (where the "
+                                          'robot is), this loads what the space looks like. They '
+                                          'live side by side in a saved map directory, e.g. '
+                                          'map_path:=~/kaya_maps/home_final/cuvslam with '
+                                          'nvblox_map:=~/kaya_maps/home_final/home.nvblx. Giving '
+                                          'only map_path leaves the robot correctly localized on '
+                                          'a map that has forgotten the building.'),
         DeclareLaunchArgument('rviz', default_value='false'),
         DeclareLaunchArgument('foxglove', default_value='false',
                               description='Serve the stack to Foxglove Studio over the LAN, for '
@@ -167,6 +178,15 @@ def generate_launch_description():
             package='rviz2', executable='rviz2', name='rviz2',
             condition=IfCondition(LaunchConfiguration('rviz')),
             output='log',
+        ),
+
+        # Reload the saved nvblox volume once nvblox is up. See the node for
+        # why this is a node rather than a delay, and why its success flag can
+        # be trusted where cuVSLAM's cannot.
+        Node(
+            package='kaya_bringup', executable='nvblox_map_loader',
+            name='nvblox_map_loader', output='screen',
+            parameters=[{'nvblox_map': LaunchConfiguration('nvblox_map')}],
         ),
 
         # ----------------------------------------------------------- Foxglove
