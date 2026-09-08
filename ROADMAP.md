@@ -180,13 +180,73 @@ pre-filter to keep the shortlist small once there are many keyframes.
 robot capability — only the keyframes from Phase 9 and the navigation that
 already works.
 
-### Phase 11 — Objects, for precise targets
-Now add `isaac_ros_yolov8`: detections projected through depth and TF into map
-coordinates, stored alongside the keyframes. This is what turns "go to the
-kitchen" into "go to the fridge".
+### Phase 11 — Objects: find, track, and follow
 
-**Watch for:** GPU contention — this is the first phase that genuinely competes
-with cuVSLAM. Verify raw VIO drift on a driven loop stays under ~1%.
+Two related capabilities, sharing a detection stack:
+
+- **Precise targets.** "Go to the fridge" rather than "go to the kitchen":
+  detections projected through depth and TF into map coordinates, stored
+  alongside the keyframes.
+- **Follow that.** "Track the red backpack and follow it" — acquire a target
+  named in words, keep it in view, and move with it while avoiding obstacles.
+
+**Two models, used for different jobs.** They are not alternatives:
+
+| | `isaac_ros_yolov8` | NanoOWL |
+|---|---|---|
+| status | already installed | needs installing |
+| vocabulary | 80 fixed COCO classes | **anything, described in words** |
+| speed | fast, real-time capable | ViT-based, expensive |
+| use | person following, common objects | acquiring arbitrary targets |
+
+YOLOv8 already knows `person`, so person-following needs nothing new. NanoOWL
+earns its place for "follow my cat", "track the blue box" — targets that were
+never a training class.
+
+**The pattern that makes this affordable.** NanoOWL is reported at ~95 FPS on
+AGX Orin, which is roughly 4-7x more capable than this Orin Nano 8 GB — expect
+single-digit to low-teens FPS here standalone, and less sharing the GPU with
+cuVSLAM and nvblox. That is fine, because open-vocabulary detection is only
+needed to ACQUIRE a target, not to follow one:
+
+    "follow the red backpack"
+      -> NanoOWL runs once            (slow, open-vocabulary) -> target box
+      -> lightweight tracker follows  (10-15 Hz, no ViT in the loop)
+      -> NanoOWL re-acquires only when the track is lost
+
+A correlation or IoU-association tracker costs almost nothing next to a ViT.
+Running NanoOWL every frame would be the obvious implementation and the wrong
+one.
+
+**Turning a tracked box into motion.**
+
+    bounding box -> depth at the box -> 3D point (camera frame)
+                 -> TF -> target position in the MAP frame
+                 -> goal at a standoff distance (~1 m) on the robot's side
+                 -> republish at ~2 Hz as the target moves
+
+Nav2 then does the driving and the obstacle avoidance, which it already does
+well — nothing new is needed there. Following is a goal-republishing problem,
+not a new controller.
+
+**Behaviour worth getting right, learned the hard way elsewhere in this
+project:**
+
+- **Standoff, not pursuit.** Target a point ~1 m short of the subject. Driving
+  at the actual detection means arriving at a person's feet.
+- **Lost target must stop, not guess.** If the track is lost, stop and try to
+  re-acquire. Never extrapolate a person's motion into a goal.
+- **Cap the speed below the drive limits already set** (0.15 m/s), so following
+  never becomes the fastest thing the robot does.
+- **The camera faces forward only.** A target that moves laterally out of a
+  ~90 deg FOV is simply gone. The robot must turn to keep it, which is a real
+  behaviour to write, not a detail.
+
+**Watch for:** this is the first phase that genuinely competes with cuVSLAM for
+GPU. Memory today is 3.7 GB used of 7.5 GB with the nav stack running, so there
+is room, but verify raw VIO drift on a driven loop stays under ~1% with
+detection running. `vo_state` and frame times will look fine either way — that
+is exactly how the `time_domain` regression hid for a day.
 
 ### Phase 12 — Memory and events
 Event table, decay of stale objects, time-aware queries. "When did you last
