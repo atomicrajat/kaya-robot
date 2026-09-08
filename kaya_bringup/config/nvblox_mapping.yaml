@@ -1,0 +1,183 @@
+### nvblox settings for BUILDING A MAP, as opposed to navigating with one.
+#
+# These two jobs want opposite things from nvblox and cannot share a config.
+#
+# NAVIGATION (config/nvblox.yaml) uses mapping_type: dynamic so that a person
+# walking past is not fused into the map as a permanent wall. The mechanism
+# that achieves this is DECAY: voxel weights are multiplied by 0.95 five times
+# a second, and blocks whose weight falls below 0.001 are deallocated.
+#
+# Decay cannot tell a person who walked away from a wall you drove past. A
+# voxel not re-observed is deleted after ln(0.001)/ln(0.95) = 134 passes at
+# 5 Hz = 27 seconds, which at this robot's speed is about 4 metres. That is
+# exactly what was measured: a 77 m mapping run retained an 18.2 m^2 window
+# around wherever the robot finished, and a 59.55 m run before it retained
+# 17.3 m^2, both with excellent odometry (1.05% drift, 5 cm loop closure).
+# The map was not distorted, it was DELETED behind the robot as it drove.
+#
+# So mapping uses static_tsdf with decay switched off: one rigid world, nothing
+# forgotten. The cost is that anything moving during the mapping run IS fused
+# in permanently -- so keep people and pets out of the way while mapping, which
+# is a reasonable thing to ask for one deliberate pass.
+#
+# Everything else is inherited from nvblox.yaml deliberately, so the two stay
+# in step: slice heights, voxel size, integration distances, clearing radius.
+
+#
+# Fuses the depth camera into a TSDF, converts that to an ESDF
+# (distance-to-nearest-obstacle, which is exactly what a planner wants), and
+# publishes a 2D slice of it for Nav2's costmap. Kaya has no LiDAR, so this
+# is where every obstacle in the costmap comes from.
+#
+# ---------------------------------------------------------------------------
+# THE SLICE HEIGHTS ARE THE POINT OF THIS FILE, AND THEY ARE MEASURED FROM
+# THE FLOOR -- but only because slam_cuvslam.launch.py anchors cuVSLAM to
+# base_footprint. Change that and every number here silently becomes wrong.
+#
+# nvblox slices in the GLOBAL frame, whose origin is wherever cuVSLAM zeroes
+# itself: its base_frame. base_footprint is the floor projection, so map z=0
+# is floor level and these heights mean what they say.
+#
+# We got this wrong once, and it is worth recording how. cuVSLAM was
+# originally anchored to base_link, which the URDF places one wheel radius up
+# (base_footprint -> base_link = 0.037 m, verified live). That silently
+# raised the whole obstacle band by 37 mm: the floor of it sat at 8.7 cm
+# rather than the 5 cm written here, so a book, a door threshold, a cable
+# bundle or a shoe was invisible to the planner -- and with 37 mm wheels that
+# cannot climb, every one of those is a collision.
+#
+# The base_link anchoring was a genuine bug in its own right (it gave
+# base_link two TF parents and split the tree, so Nav2's costmaps could not
+# activate). Fixing it there fixed the heights here as a side effect. Left as
+# a warning: these numbers are only floor-referenced for as long as
+# cuVSLAM's base_frame is a floor-level frame.
+# ---------------------------------------------------------------------------
+
+/**:
+  ros__parameters:
+    # 5 cm. For a base 0.32 m across this resolves a doorway and a chair leg
+    # while staying affordable: voxel memory scales cubically, and on 8 GB
+    # shared with cuVSLAM there is no headroom to be casual. Drop to 0.04 only
+    # if genuinely needed, and watch RAM when you do.
+    voxel_size: 0.05
+
+    # dynamic, not static_tsdf. static_tsdf assumes one rigid world and fuses
+    # EVERYTHING it sees into it permanently -- so a person walking past the
+    # robot becomes a wall that is still there after they have left, and the
+    # planner keeps routing around a doorway that is actually clear.
+    #
+    # dynamic mode separates geometry that moves from geometry that does not.
+    # It maintains an extra set of voxel layers to do so; measured cost on this
+    # board, full stack running:
+    #
+    #     peak system used   3433 -> 3595 MB   (+162 MB)
+    #     nvblox RSS         1085 -> 1197 MB   (+112 MB)
+    #     memory available   4112 -> 3950 MB
+    #
+    # Affordable, and it buys the robot the ability to work around people.
+    #
+    # IMPORTANT: this changes which topic Nav2 must consume. See
+    # nvblox_map_slice_topic in nav2.yaml -- the static slice now has moving
+    # objects removed from it, so subscribing to it would hide people from the
+    # costmap entirely. The two files have to be reasoned about together.
+    #
+    # The other modes: static_occupancy is a lighter, less accurate static map;
+    # human_with_static_tsdf and human_with_static_occupancy do the same
+    # separation but driven by a SEGMENTATION MASK rather than geometry, which
+    # needs a network (isaac_ros_unet, not installed) and more GPU. Geometric
+    # detection needs neither and handles anything that moves, not just people.
+    mapping_type: static_tsdf
+    esdf_mode: 2d
+
+    static_mapper:
+      # 5 cm off the ground: the obstacle band starts here.
+      #
+      # An earlier revision of this file warned against lowering the band
+      # because it would "admit floor noise as phantom obstacles". That was
+      # tested rather than argued, on one identical stationary scene, corridor
+      # 0.4-1.5 m ahead by +-0.4 m lateral, 352 observed cells both times:
+      #
+      #     band starting 8.7 cm up:  14 cells marked obstacle (4.0%)
+      #     band starting 5.0 cm up:  15 cells marked obstacle (4.3%)
+      #
+      # One cell. The rendered slice showed no floor wedge in either -- free
+      # space stayed a clean FOV triangle with compact obstacles at its edges.
+      # There is no floor noise here to admit, and the camera pose is why: it
+      # is mounted at 0.1737 m and pitched 4.89 deg NOSE UP, so it barely
+      # images the near floor at all. That same pitch is why the near-field
+      # blind spot is real and cannot be tuned away from this file.
+      #
+      # Going below 5 cm is untested. Do not, without repeating that A/B.
+      esdf_slice_min_height: 0.05
+      # A little over the 0.19 m camera top, so overhangs that would clip the
+      # camera still count as obstacles.
+      esdf_slice_max_height: 0.20
+      # Where the published 2D slice is reported -- mid-body: clear of floor
+      # speckle, low enough to catch low obstacles.
+      esdf_slice_height: 0.10
+
+      # Depth beyond this is not integrated. The Gemini 335L's stereo error
+      # grows with distance squared -- our Phase 4 loop-closure work already
+      # showed 3-4 m is where it gets noisy -- and integrating far, wrong
+      # depth smears the TSDF. 3 m keeps what is trustworthy.
+      projective_integrator_max_integration_distance_m: 3.0
+      esdf_integrator_max_distance_m: 2.0
+
+    # How often depth is FUSED, independent of how fast it arrives. The
+    # default is 40 Hz -- faster than the camera's 30 Hz, so every single frame
+    # gets integrated. That is the dominant load in this stack, and it starves
+    # the very pipeline feeding it: measured on the full mapping stack, depth
+    # arrived at only 17.4 Hz and cuVSLAM logged 3.8 dropped-frame warnings per
+    # second. Over a 32-minute mapping run that came to 8797 dropped frames and
+    # 45 cm of vertical pose drift, which left nvblox's own obstacle band 55 cm
+    # above the floor the robot was standing on. The map was unusable.
+    #
+    # 10 Hz is not a compromise, it is still oversampled. At this robot's
+    # 0.15 m/s cap that is one fusion every 1.5 cm of travel against a 5 cm
+    # voxel -- three integrations per voxel crossed. Nothing is lost.
+    #
+    # Note the neighbours: colour, ESDF and mesh all default to a sensible
+    # 5 Hz. Depth at 40 was the outlier, not the rule.
+    integrate_depth_rate_hz: 10.0
+
+    # nvblox DELETES the map outside this radius of the robot, once per
+    # second. The default is 5 m, which is right for a robot that only needs
+    # local obstacle avoidance and completely wrong for building a map of a
+    # building: it erases everywhere you have been as you drive away from it.
+    #
+    # Measured: a 59.55 m mapping run with good odometry (1.05% raw VIO drift,
+    # 5 cm loop closure) produced a mesh covering only 17.3 m^2 -- a window
+    # around wherever the robot happened to finish. An earlier 32-minute run
+    # produced 17.9 m^2 for the same reason, which was wrongly blamed on drift
+    # at the time.
+    #
+    # 100 m keeps everything for any indoor space this robot will map. It is
+    # not free -- TSDF memory grows with mapped surface area, though only near
+    # surfaces, so it is far cheaper than the radius suggests. nvblox measured
+    # 1197 MB resident on the 17 m^2 map with ~3.9 GB free, so there is room;
+    # watch it on much larger spaces and lower this if memory gets tight.
+    #
+    # This is the setting to change if the robot is ever used for pure local
+    # navigation in a big building, where retaining everything is pointless.
+    map_clearing_radius_m: 100.0
+
+    # Decay OFF. This is the whole point of this file -- see the header.
+    # -1 disables the periodic decay pass entirely.
+    decay_tsdf_rate_hz: -1.0
+    decay_dynamic_occupancy_rate_hz: -1.0
+    # Belt and braces: even if a decay pass somehow runs, do not deallocate the
+    # blocks it touches, so the geometry survives to be saved.
+    decay_integrator_deallocate_decayed_blocks: false
+
+    # The visualisation layers are clipped separately from the map itself, and
+    # to the same 5 m by default. This governs what is published for RViz or
+    # Foxglove -- and the mesh that came back from save_ply measured 3.07 x
+    # 5.61 m, consistent with either limit, so both are raised rather than
+    # guessing which one truncated it.
+    #
+    # Height 3 m rather than the default 2 m so tall rooms and stairwells are
+    # not sliced off at the ceiling.
+    layer_visualization_exclusion_radius_m: 100.0
+    layer_visualization_exclusion_height_m: 3.0
+
+    publish_esdf_distance_slice: true

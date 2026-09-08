@@ -3,6 +3,11 @@
     ros2 launch kaya_bringup nav.launch.py
     ros2 launch kaya_bringup nav.launch.py slam:=rtabmap    # RGB-D route
 
+Building a map (nothing forgotten) vs. navigating (people not fused in):
+
+    ros2 launch kaya_bringup nav.launch.py mapping:=true nav2:=false   # map it
+    ros2 launch kaya_bringup nav.launch.py map_path:=...               # use it
+
 Mapping vs. returning to a known map:
 
     # first visit -- build a map, then save it
@@ -49,7 +54,8 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import EqualsSubstitution, LaunchConfiguration
+from launch.substitutions import (EqualsSubstitution, LaunchConfiguration,
+                                  PythonExpression)
 from launch_ros.actions import Node
 
 
@@ -57,7 +63,15 @@ def generate_launch_description():
     bringup_share = get_package_share_directory('kaya_bringup')
     nav2_share = get_package_share_directory('nav2_bringup')
 
-    nvblox_cfg = os.path.join(bringup_share, 'config', 'nvblox.yaml')
+    # Two nvblox configs, because building a map and navigating with one want
+    # opposite behaviour. Navigation uses dynamic mapping so people are not
+    # fused in as walls; that works by DECAYING voxels, which also deletes
+    # everywhere the robot drove away from. Mapping therefore uses static_tsdf
+    # with decay off. See config/nvblox_mapping.yaml for the measurements.
+    nvblox_cfg = PythonExpression([
+        "'", os.path.join(bringup_share, 'config', 'nvblox_mapping.yaml'),
+        "' if '", LaunchConfiguration('mapping'), "' == 'true' else '",
+        os.path.join(bringup_share, 'config', 'nvblox.yaml'), "'"])
     nav2_cfg = os.path.join(bringup_share, 'config', 'nav2.yaml')
 
     return LaunchDescription([
@@ -75,6 +89,12 @@ def generate_launch_description():
                               description='Rough starting pose in the saved map (a hint only).'),
         DeclareLaunchArgument('hint_y', default_value='0.0'),
         DeclareLaunchArgument('hint_yaw', default_value='0.0'),
+        DeclareLaunchArgument('mapping', default_value='false',
+                              description='Set true for a deliberate MAPPING run: static_tsdf '
+                                          'with decay disabled, so nothing is forgotten behind '
+                                          'the robot. Leave false to navigate, which uses '
+                                          'dynamic mapping so people are not fused in as walls. '
+                                          'See config/nvblox_mapping.yaml.'),
         DeclareLaunchArgument('rviz', default_value='false'),
 
         # --------------------------------------------------------------- SLAM

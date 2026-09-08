@@ -116,4 +116,36 @@
     # 5 Hz. Depth at 40 was the outlier, not the rule.
     integrate_depth_rate_hz: 10.0
 
+    # nvblox DELETES the map outside this radius of the robot, once per
+    # second. The default is 5 m, which is right for a robot that only needs
+    # local obstacle avoidance and completely wrong for building a map of a
+    # building: it erases everywhere you have been as you drive away from it.
+    #
+    # Measured: a 59.55 m mapping run with good odometry (1.05% raw VIO drift,
+    # 5 cm loop closure) produced a mesh covering only 17.3 m^2 -- a window
+    # around wherever the robot happened to finish. An earlier 32-minute run
+    # produced 17.9 m^2 for the same reason, which was wrongly blamed on drift
+    # at the time.
+    #
+    # 100 m keeps everything for any indoor space this robot will map. It is
+    # not free -- TSDF memory grows with mapped surface area, though only near
+    # surfaces, so it is far cheaper than the radius suggests. nvblox measured
+    # 1197 MB resident on the 17 m^2 map with ~3.9 GB free, so there is room;
+    # watch it on much larger spaces and lower this if memory gets tight.
+    #
+    # This is the setting to change if the robot is ever used for pure local
+    # navigation in a big building, where retaining everything is pointless.
+    map_clearing_radius_m: 100.0
+
+    # The visualisation layers are clipped separately from the map itself, and
+    # to the same 5 m by default. This governs what is published for RViz or
+    # Foxglove -- and the mesh that came back from save_ply measured 3.07 x
+    # 5.61 m, consistent with either limit, so both are raised rather than
+    # guessing which one truncated it.
+    #
+    # Height 3 m rather than the default 2 m so tall rooms and stairwells are
+    # not sliced off at the ceiling.
+    layer_visualization_exclusion_radius_m: 100.0
+    layer_visualization_exclusion_height_m: 3.0
+
     publish_esdf_distance_slice: true
