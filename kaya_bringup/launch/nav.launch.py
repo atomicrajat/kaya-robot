@@ -96,6 +96,14 @@ def generate_launch_description():
                                           'dynamic mapping so people are not fused in as walls. '
                                           'See config/nvblox_mapping.yaml.'),
         DeclareLaunchArgument('rviz', default_value='false'),
+        DeclareLaunchArgument('foxglove', default_value='false',
+                              description='Serve the stack to Foxglove Studio over the LAN, for '
+                                          'a live map and robot position without an X session on '
+                                          'the robot. Connect the desktop app to '
+                                          'ws://192.168.1.28:8765. Off by default until the cost '
+                                          'to VIO of a subscribed client is measured on a driven '
+                                          'loop -- see the note at the node.'),
+        DeclareLaunchArgument('foxglove_port', default_value='8765'),
 
         # --------------------------------------------------------------- SLAM
         IncludeLaunchDescription(
@@ -159,5 +167,43 @@ def generate_launch_description():
             package='rviz2', executable='rviz2', name='rviz2',
             condition=IfCondition(LaunchConfiguration('rviz')),
             output='log',
+        ),
+
+        # ----------------------------------------------------------- Foxglove
+        # A websocket view of the running stack, so the map and the robot's
+        # position can be watched from the workstation. RViz on the robot needs
+        # an X session and pushes rendering onto the same GPU cuVSLAM and nvblox
+        # are using; this pushes serialised messages over the LAN instead.
+        #
+        # The bridge only serialises topics a connected client has actually
+        # SUBSCRIBED to, so its cost is set by which panels are open, not by
+        # what is whitelisted. Measured on this board, stationary, full nav
+        # stack up, against a client subscribed to the worst case at once --
+        # nvblox mesh, depth point cloud, colour image and map slice, 15.4 MB/s
+        # over the LAN:
+        #
+        #     track_execution_time_mean   6.79 ms -> 7.14 ms
+        #     bridge CPU                  3.7%    -> 6.0%
+        #     memory used                 3657 MB -> 3881 MB
+        #
+        # Cheap enough to leave connected, and an idle bridge costs ~3.7% CPU.
+        # But that is a STATIONARY measurement, and this project has been caught
+        # by exactly that gap before: vo_state and frame times reported perfect
+        # health all through the time_domain regression while raw drift went to
+        # 15-32%. The honest test is raw VIO drift on a driven loop with a
+        # client connected, and it has not been run yet -- which is why this
+        # argument still defaults to false.
+        Node(
+            package='foxglove_bridge', executable='foxglove_bridge',
+            name='foxglove_bridge',
+            condition=IfCondition(LaunchConfiguration('foxglove')),
+            output='screen',
+            parameters=[{
+                'port': LaunchConfiguration('foxglove_port'),
+                # 0.0.0.0 so the workstation can reach it; the robot is on a
+                # home LAN behind a router, not an open network.
+                'address': '0.0.0.0',
+                'use_sim_time': False,
+            }],
         ),
     ])
