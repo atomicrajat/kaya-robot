@@ -54,6 +54,9 @@
 </style>
 </head>
 <body>
+<script src="/static/three.min.js"></script>
+<script src="/static/GLTFLoader.js"></script>
+<script src="/static/RoomEnvironment.js"></script>
 <header>
   <h1>Kaya</h1>
   <span class="pill" id="p-conn">connecting…</span>
@@ -88,6 +91,12 @@
         Phase 10. Needs the keyframe store (Phase 9) first — the button is wired
         to the endpoint that will answer it.
       </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h2>Robot <span style="text-transform:none;letter-spacing:0" id="botlbl">CAD model</span></h2>
+      <div id="botview" style="height:210px;position:relative;background:#0b0f12"></div>
+      <div class="note">Live heading, from the same TF the map uses. Drag to orbit.</div>
     </div>
 
     <div class="card">
@@ -283,12 +292,7 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
 let three = null;
 function init3d() {
   if (three || !state || !state.base) return;
-  const s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js';
-  s.onload = () => build3d();
-  s.onerror = () => { $('#view3d').innerHTML =
-    '<div class="hint" style="position:static;margin:16px">3D needs three.js from the CDN, which this machine could not reach.</div>'; };
-  document.head.appendChild(s);
+  build3d();
 }
 
 function build3d() {
@@ -301,8 +305,11 @@ function build3d() {
   const cam = new THREE.PerspectiveCamera(55, host.clientWidth / host.clientHeight, 0.1, 200);
   const rend = new THREE.WebGLRenderer({ antialias: true });
   rend.setSize(host.clientWidth, host.clientHeight);
+  rend.outputEncoding = THREE.sRGBEncoding;
+  rend.toneMapping = THREE.ACESFilmicToneMapping;
   host.innerHTML = ''; host.appendChild(rend.domElement);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  scene.environment = environment(rend);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
   const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(5, 10, 7); scene.add(dir);
 
   const cnv = document.createElement('canvas');
@@ -328,9 +335,16 @@ function build3d() {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60),
     new THREE.MeshLambertMaterial({ color: 0x11181d }));
   floor.rotation.x = -Math.PI / 2; scene.add(floor);
-  const bot = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.42, 12),
+  // Placeholder until the CAD model arrives, then swapped for the real thing.
+  const bot = new THREE.Group(); scene.add(bot);
+  const stub = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.42, 12),
     new THREE.MeshLambertMaterial({ color: 0x4fc3f7 }));
-  bot.rotation.x = Math.PI / 2; scene.add(bot);
+  stub.rotation.x = Math.PI / 2; bot.add(stub);
+  loadBot(m => {
+    const box = new THREE.Box3().setFromObject(m), c = box.getCenter(new THREE.Vector3());
+    m.position.set(-c.x, -box.min.y, -c.z);
+    bot.remove(stub); bot.add(m);
+  });
 
   let ang = 0.7, dist = 14, tilt = 0.85, dragging = null;
   rend.domElement.onmousedown = e => dragging = { x: e.clientX, y: e.clientY, a: ang, t: tilt };
@@ -345,7 +359,8 @@ function build3d() {
   (function loop() {
     three = true;
     const p = state && state.pose ? state.pose : { x: 0, y: 0, yaw: 0 };
-    bot.position.set(p.x, 0.21, -p.y);
+    bot.position.set(p.x, 0, -p.y);
+    bot.rotation.y = p.yaw;
     const cx = p.x + Math.cos(ang) * dist * Math.cos(tilt);
     const cz = -p.y + Math.sin(ang) * dist * Math.cos(tilt);
     cam.position.set(cx, dist * Math.sin(tilt) + 1, cz);
@@ -354,6 +369,87 @@ function build3d() {
     requestAnimationFrame(loop);
   })();
 }
+
+// ------------------------------------------------------- robot CAD model
+// Converted from kaya_robot_ttb.usdz (Z-up, centimetres) to a Y-up GLB in
+// metres; see dashboard/README.md. Loaded once and cloned, so the corner
+// panel and the 3D map view cannot drift apart.
+let botProto = null, botWaiters = [], envMap = null;
+
+// The CAD materials are real PBR: AluminumSatin and BrassPolished come through
+// at metalness 1.0. A metal with nothing to reflect renders BLACK in three.js,
+// so every renderer showing this model needs an environment to reflect. This
+// is why the model looked like a silhouette before the env map was added.
+function environment(renderer) {
+  if (envMap) return envMap;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  envMap = pmrem.fromScene(new THREE.RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
+  return envMap;
+}
+function loadBot(cb) {
+  if (botProto) return cb(botProto.clone());
+  botWaiters.push(cb);
+  if (botWaiters.length > 1) return;
+  new THREE.GLTFLoader().load('/static/kaya_robot.glb', g => {
+    botProto = g.scene;
+    botWaiters.forEach(f => f(botProto.clone()));
+    botWaiters = [];
+  }, undefined, () => { $('#botlbl').innerHTML = '<span class="err">model failed to load</span>'; });
+}
+
+(function botPanel() {
+  const host = $('#botview');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0f12);
+  const cam = new THREE.PerspectiveCamera(40, host.clientWidth / 210, 0.01, 50);
+  const rend = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  rend.setPixelRatio(Math.min(devicePixelRatio, 2));
+  rend.setSize(host.clientWidth, 210);
+  host.appendChild(rend.domElement);
+  rend.outputEncoding = THREE.sRGBEncoding;
+  rend.toneMapping = THREE.ACESFilmicToneMapping;
+  rend.toneMappingExposure = 1.15;
+  scene.environment = environment(rend);
+  const key = new THREE.DirectionalLight(0xffffff, 1.1); key.position.set(2, 3, 2); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x88bbff, 0.5); rim.position.set(-2, 1, -2); scene.add(rim);
+
+  const pivot = new THREE.Group(); scene.add(pivot);
+  loadBot(m => {
+    // Sit the model on y=0 and centre it, so it spins about its own axis
+    // rather than about wherever Fusion put the origin.
+    const box = new THREE.Box3().setFromObject(m), c = box.getCenter(new THREE.Vector3());
+    m.position.set(-c.x, -box.min.y, -c.z);
+    pivot.add(m);
+    $('#botlbl').textContent = (box.getSize(new THREE.Vector3()).length() * 100).toFixed(0) + ' cm';
+  });
+
+  let ang = 0.9, tilt = 0.42, drag = null, manual = false;
+  rend.domElement.onmousedown = e => { drag = { x: e.clientX, y: e.clientY, a: ang, t: tilt }; manual = true; };
+  window.addEventListener('mouseup', () => drag = null);
+  rend.domElement.onmousemove = e => {
+    if (!drag) return;
+    ang = drag.a + (e.clientX - drag.x) * 0.01;
+    tilt = Math.max(0.05, Math.min(1.4, drag.t + (e.clientY - drag.y) * 0.006));
+  };
+  new ResizeObserver(() => {
+    if (!host.clientWidth) return;
+    cam.aspect = host.clientWidth / 210; cam.updateProjectionMatrix();
+    rend.setSize(host.clientWidth, 210);
+  }).observe(host);
+
+  (function loop() {
+    requestAnimationFrame(loop);
+    // Yaw follows the robot for real; if nobody has dragged, orbit slowly so
+    // the panel is not a still image when the robot is parked.
+    pivot.rotation.y = state && state.pose ? state.pose.yaw : 0;
+    if (!manual) ang += 0.0035;
+    const d = 0.55;
+    cam.position.set(Math.cos(ang) * d * Math.cos(tilt), d * Math.sin(tilt) + 0.06, Math.sin(ang) * d * Math.cos(tilt));
+    cam.lookAt(0, 0.08, 0);
+    rend.render(scene, cam);
+  })();
+})();
 
 // ----------------------------------------------------------------- ask (P10)
 $('#askform').onsubmit = async e => {

@@ -225,6 +225,20 @@ def make_handler(node):
                 self._send(200, json.dumps(body).encode(), 'application/json')
             elif path == '/api/base.png' and node.base:
                 self._send(200, node.base['png'], 'image/png', cache=True)
+            elif path.startswith('/static/'):
+                # three.js, its loaders and the robot GLB are vendored rather
+                # than pulled from a CDN, so the dashboard still works when the
+                # robot is on a network with no route out.
+                name = os.path.basename(path)
+                f = os.path.join(HERE, 'static', name)
+                if not os.path.isfile(f):
+                    self._send(404, b'not found', 'text/plain')
+                    return
+                ctype = ('model/gltf-binary' if name.endswith('.glb')
+                         else 'application/javascript' if name.endswith('.js')
+                         else 'application/octet-stream')
+                with open(f, 'rb') as fh:
+                    self._send(200, fh.read(), ctype, cache=True)
             elif path == '/api/costmap.png':
                 with node.lock:
                     png = node.costmap_png

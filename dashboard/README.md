@@ -50,3 +50,36 @@ report health instead of truth. Read it on the robot.
 `/api/ask` returns 501 for the same reason — Phase 9 (keyframes) and Phase 10
 (the reasoning model) are not built, and an endpoint that invents an answer is
 worse than one that says it is not built.
+
+## The robot model
+
+`static/kaya_robot.glb` is the Fusion CAD model, shown in the Robot panel and
+used as the marker in the 3D map view. It is generated from
+`~/work_projects/kaya_robot/kaya_robot_ttb.usdz`:
+
+    cd ~/isaac-sim && ./python.sh <repo>/dashboard/usd_to_glb.py
+
+Nothing on this machine could read the source formats — no blender, assimp,
+usdcat or pxr, and neither `.f3d` (a Fusion archive) nor `.usdz` loads in a
+browser. The USD Python bundled inside Isaac Sim can, so the converter reads
+the stage with that and writes the glTF binary itself.
+
+Three things it has to get right, each of which is silently wrong otherwise:
+
+- **Units.** The stage is in centimetres (`metersPerUnit` 0.01). Everything else
+  in this project is metres.
+- **Up axis.** USD is Z-up, three.js is Y-up: `(x, y, z) -> (x, z, -y)`.
+- **Materials.** The stage carries 20 real materials — AluminumSatin,
+  BrassPolished, PlasticMatteYellow, RubberSoft. A first pass ignored them and
+  emitted one flat grey, which throws away the only thing that makes the model
+  readable at 200 px.
+
+And one that bites in the browser rather than the converter: those materials are
+genuine PBR, with metalness 1.0 on the aluminium and brass. **A metal with
+nothing to reflect renders black in three.js**, so both renderers set
+`scene.environment` from a PMREM'd `RoomEnvironment`. Without it the model is a
+silhouette and looks like a failed load.
+
+`three.min.js`, `GLTFLoader.js`, `RoomEnvironment.js` and the `.glb` are all
+vendored under `static/` rather than pulled from a CDN, so the dashboard works
+on a network with no route out — which is the normal case for a robot.
