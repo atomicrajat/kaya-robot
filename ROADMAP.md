@@ -277,9 +277,10 @@ In order. Stop at the first failure rather than pressing on.
          map_path:=/home/orin-nano/kaya_maps/home_final/cuvslam \
          hint_x:=3.0 hint_y:=-4.0
 
-   Expect relocalisation to within ~10 cm despite the deliberately wrong hint —
-   **in daylight**. See "relocalisation is illumination-specific" below; run
-   this one in the afternoon, as the map was built at 15:24.
+   Expect relocalisation to within ~10 cm despite the deliberately wrong hint.
+   It failed this way on the night of 2026-09-08 while hints up to 3.5 m still
+   worked — see "the relocalisation recovery radius is not fixed" below. Run it
+   in the afternoon first, since that is the open question.
 
 3. **Navigate to two or three different points** on the saved map, including
    one in another room. Everything so far has been short hops in open space;
@@ -290,36 +291,45 @@ In order. Stop at the first failure rather than pressing on.
 
 5. **Then start Phase 8** (Foxglove), which needs no driving and little battery.
 
-### Relocalisation is illumination-specific
+### The relocalisation recovery radius is not fixed — and why is unresolved
 
-Measured 2026-09-08, robot on its marked spot at the saved map's origin, at
-21:00 against a map built the same afternoon at 15:24:
+Measured 2026-09-08, robot on its marked spot, which IS the saved map's origin
+(so a hint of 3,-4 is exactly 5 m wrong), against `home_final` built the same
+afternoon at 15:24:
 
-| hint error | afternoon | that night |
+| hint error | afternoon | that night, 21:00 |
 |---|---|---|
 | 0 m | — | localizes, 1-2 cm |
 | 2.0 m | — | localizes, 2.3 cm |
 | 3.5 m | — | localizes, 1.5 cm |
-| 5.0 m | **5.9 cm** | **fails** |
+| 5.0 m | **5.9 cm** | **fails, reproducibly** |
 
-Nothing in the stack changed between those runs; the room did. The overhead
-lamp was on as usual, but the daylight through the window was gone, and IR
-texture measured **4.33** against ~11.8 for a scene with usable features and
-~4.6 for the dark room in `tools/README.md`. Relocalisation was matching a
-daytime map against a night scene: enough features left to confirm a pose it is
-already near, not enough to search 5 m for one.
+So relocalisation still works, and works well; what shrank is how far a wrong
+hint can be and still recover. Nothing in the stack changed between those runs
+— both repos at the same commit, GPU healthy, IR pair at 28.9 Hz, `vo_state` 1,
+`track_execution_time_mean` 7.1 ms, map file intact.
 
-So the recovery radius is not a fixed property of the map — it shrinks as the
-match weakens. Two consequences worth carrying into later phases:
+**The cause is not established, and the obvious suspect does not survive
+contact with what this project already measured.** The tempting story is
+"daylight map, night scene" — but indoor IR texture here was measured at 4.39 in
+daylight and 4.4 at night, *identical*, and "VIO needs daylight" and
+"`enable_laser` is needed at night" were both tested to destruction and found to
+be artefacts of the `time_domain` timestamp bug. Texture that night measured
+4.33, which is simply this room's normal number, not evidence of darkness.
 
-- **A wrong-hint test is a lighting test as much as a mapping test.** Run it in
-  conditions resembling the mapping run, or expect to be misled.
-- **Phase 9 keyframes inherit this.** A keyframe store built in daylight will
-  answer daytime questions best. Worth mapping the same space more than once,
-  at different times of day, rather than treating one map as canonical.
+What is genuinely different from the mapping run is the scene's contents rather
+than its lighting: a person was sitting at the desk, occupying part of the view,
+and furniture may have moved. That is a hypothesis, not a finding.
 
-Turning `enable_laser` on does not rescue it: the projector's dots are fixed to
-the camera and absent from the saved map, so they add texture that cannot match.
+**How to resolve it, in this order:**
+
+1. Re-run the 5 m hint in the afternoon, same spot. If it recovers, time of day
+   matters and the next question is what about it. If it still fails, the map or
+   the scene changed and lighting was never involved.
+2. Only then vary one thing at a time — room empty vs occupied, lamp on vs off.
+
+Do not record "relocalisation needs daylight" as a finding until step 1 says so.
+This project has already written that sentence once and had to retract it.
 
 ### Practical notes
 

@@ -75,11 +75,13 @@ night against a map built in afternoon daylight, on an otherwise idle board:
     hint 5.0 m from truth    "Localization failed"      correct
 
 So the recovery radius that afternoon spanned at least 5 m -- it recovered from
-a 5 m hint to 5.9 cm -- and at night sits between 3.5 m and 5 m. Nothing in the
-stack changed; the room did. Relocalisation is matching a daytime map against a
-night scene, and the weaker the match, the smaller the radius. IR texture in
-that room measured 4.33, against ~11.8 for a scene with features and ~4.6 for
-the dark room in tools/README.md.
+a 5 m hint to 5.9 cm -- and that night sat between 3.5 m and 5 m, with nothing
+in the stack changed. Why is unresolved; see ROADMAP.md. It is NOT established
+to be lighting: indoor IR texture here measures the same by day and by night
+(4.39 vs 4.4), and "VIO needs daylight" was tested to destruction and found to
+be an artefact of the time_domain bug. What matters here is only that the radius
+is not a fixed property of the map, so a hint far from truth is not safe to
+assume will recover.
 
 The same 3.5 m hint on a LOADED board is where it turns dangerous. With ten
 orphaned nvblox_node processes left over from earlier launches, ~54 MB of the
@@ -304,10 +306,10 @@ class OriginAnchor(Node):
             self.awaiting_verdict = False
             self.fail(
                 'cuVSLAM could not find the robot in %s. Either it is not '
-                'anywhere in that map, the pose hint is too far from truth, '
-                'or the scene no longer looks like it did when the map was '
-                'built -- illumination counts, and the recovery radius shrinks '
-                'as the match weakens.' % self.map_path)
+                'anywhere in that map, or the pose hint is too far from truth '
+                '-- the recovery radius is not fixed, and has measured both '
+                'over 5 m and under 5 m in the same room on the same day.'
+                % self.map_path)
 
     def verify_tick(self):
         """Poll map -> base until it holds still, then judge the settled pose.
