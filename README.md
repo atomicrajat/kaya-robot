@@ -2,6 +2,10 @@
 
 ROS 2 Jazzy packages for the Kaya omni-wheel robot (Jetson Orin Nano 8GB, JetPack 7.2.1).
 
+See `ROADMAP.md` for the plan and the next tests, and `ENVIRONMENT.md` for the
+development machine — the project moved from the MacBook to the Ubuntu
+workstation on 2026-09-08.
+
 | Package | Purpose |
 |---|---|
 | `kaya_imu` | IMU conditioning. `camera_imu_node` is the production path (Gemini 335L built-in IMU); `imu_node` + `mpu6050.py` drive the external MPU-6050 and are kept only as a fallback. |
