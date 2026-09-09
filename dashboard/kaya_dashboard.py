@@ -99,6 +99,8 @@ BULK = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
 MAX_PATH_PTS = 300
 # The rollout cloud is ~7.6k states; this many reads the same at screen size.
 MAX_CANDIDATE_PTS = 700
+# A plan that stopped arriving is not a plan; Nav2 sends no empty Path on abort.
+PLAN_STALE_S = 2.0
 
 
 def load_base_map(stem):
@@ -137,11 +139,15 @@ class Dash(Node):
         self.vio = None
         self.anchored = None
         self.plan = None
+        self.plan_t = 0.0
         self.optimal = None
+        self.optimal_t = 0.0
         self.candidates = None
+        self.candidates_t = 0.0
         self.jpeg = None
         self.jpeg_t = 0.0
         self.jetson = None
+        self.track = None
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
@@ -168,7 +174,11 @@ class Dash(Node):
                                  self.on_jpeg, SENSOR)
         self.create_subscription(String, '/kaya/jetson_stats',
                                  self.on_jetson, 10)
+        self.create_subscription(String, '/kaya/track_status', self.on_track, 10)
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose', 10)
+        # Naming a target here is what starts following; the follower node
+        # does nothing until it receives one.
+        self.target_pub = self.create_publisher(String, '/kaya/track_target', 10)
         self.base = load_base_map(BASE_MAP)
 
     # ------------------------------------------------------------ ROS inputs
@@ -206,10 +216,12 @@ class Dash(Node):
     def on_plan(self, m):
         with self.lock:
             self.plan = self._thin(m.poses)
+            self.plan_t = time.time()
 
     def on_optimal(self, m):
         with self.lock:
             self.optimal = self._thin(m.poses)
+            self.optimal_t = time.time()
 
     def on_candidates(self, m):
         """MPPI's candidate rollouts, as a cloud of sampled states.
@@ -230,6 +242,7 @@ class Dash(Node):
         out = [[round(p.x, 3), round(p.y, 3)] for p in pts[::step]]
         with self.lock:
             self.candidates = out or None
+            self.candidates_t = time.time()
 
     def on_jpeg(self, m):
         # Throttled: the browser polls at a few Hz, so keeping every frame off
@@ -240,6 +253,26 @@ class Dash(Node):
         with self.lock:
             self.jpeg = bytes(m.data)
             self.jpeg_t = now
+
+    def fresh(self, value, stamp, max_age=None):
+        """Return a value only while it is still arriving.
+
+        Nav2 publishes no empty Path when a goal aborts, so a plan that
+        stopped coming stays in hand forever. Drawn unaged it animated a dead
+        route while the robot sat still against a wall, which reads as "still
+        going". Everything the robot streams is aged.
+        """
+        if value is None or time.time() - stamp > (max_age or PLAN_STALE_S):
+            return None
+        return value
+
+    def on_track(self, m):
+        try:
+            with self.lock:
+                self.track = json.loads(m.data)
+                self.track['t'] = time.time()
+        except ValueError:
+            pass
 
     def on_jetson(self, m):
         try:
@@ -333,10 +366,21 @@ def make_handler(node):
                         # the robot has quietly gone away.
                         'goal_subscribers': node.goal_pub.get_subscription_count(),
                         'anchored': node.anchored if link != 'offline' else None,
-                        'plan': node.plan if link != 'offline' else None,
-                        'optimal': node.optimal if link != 'offline' else None,
-                        'candidates': node.candidates if link != 'offline' else None,
+                        # Nav2 does not publish an empty Path when a goal is
+                        # aborted, so a plan that stopped arriving stays in
+                        # hand forever. Drawn unaged, the overlay animated a
+                        # dead plan along a route the robot had already given
+                        # up on -- which reads as "still going" while it sits
+                        # against a wall. Age everything the robot streams.
+                        'plan': node.fresh(node.plan, node.plan_t),
+                        'optimal': node.fresh(node.optimal, node.optimal_t),
+                        'candidates': node.fresh(node.candidates,
+                                                 node.candidates_t),
+                        'navigating': (time.time() - node.optimal_t) < PLAN_STALE_S,
                         'jetson': node.jetson if link != 'offline' else None,
+                        'track': node.fresh(node.track,
+                                            (node.track or {}).get('t', 0), 3.0),
+                        'follower': node.target_pub.get_subscription_count() > 0,
                         'camera': (node.jpeg is not None
                                    and time.time() - node.jpeg_t < 3.0),
                         'costmap': node.costmap,
@@ -392,6 +436,19 @@ def make_handler(node):
                     return
                 node.send_goal(req['x'], req['y'], req.get('yaw', 0.0))
                 self._send(200, json.dumps({'ok': True}).encode(),
+                           'application/json')
+            elif self.path == '/api/track':
+                if node.target_pub.get_subscription_count() == 0:
+                    self._send(503, json.dumps({
+                        'ok': False,
+                        'error': 'the follower node is not running. Start '
+                                 'perception/kaya_follower.py on the '
+                                 'workstation.',
+                    }).encode(), 'application/json')
+                    return
+                t = (req.get('target') or '').strip()
+                node.target_pub.publish(String(data=t))
+                self._send(200, json.dumps({'ok': True, 'target': t}).encode(),
                            'application/json')
             elif self.path == '/api/ask':
                 # Phase 10 lands here: shortlist keyframes for the question,

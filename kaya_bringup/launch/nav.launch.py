@@ -106,6 +106,19 @@ def generate_launch_description():
                                           'nvblox_map:=~/kaya_maps/home_final/home.nvblx. Giving '
                                           'only map_path leaves the robot correctly localized on '
                                           'a map that has forgotten the building.'),
+        DeclareLaunchArgument('map_2d', default_value='',
+                              description='A saved 2D grid (.yaml from save_2d_map) to serve as '
+                                          'the global costmap static layer, INSTEAD of reloading '
+                                          'the 3.3 GB nvblox volume. The same 202 m^2 costs '
+                                          '115 KB this way, and nvblox still supplies live '
+                                          'obstacles on '
+                                          'top, so furniture moved since the map was built is '
+                                          'still avoided. Pair with nav2_params pointing at '
+                                          'nav2_static_map.yaml, and leave nvblox_map empty.'),
+        DeclareLaunchArgument('nav2_params', default_value=nav2_cfg,
+                              description='Nav2 parameter file. Override to nav2_static_map.yaml '
+                                          'in this package to add the static_layer that map_2d '
+                                          'feeds.'),
         DeclareLaunchArgument('rviz', default_value='false'),
         DeclareLaunchArgument('foxglove', default_value='false',
                               description='Serve the stack to Foxglove Studio over the LAN, for '
@@ -166,7 +179,7 @@ def generate_launch_description():
                 os.path.join(nav2_share, 'launch', 'navigation_launch.py')),
             condition=IfCondition(LaunchConfiguration('nav2')),
             launch_arguments={
-                'params_file': nav2_cfg,
+                'params_file': LaunchConfiguration('nav2_params'),
                 'use_sim_time': 'false',
                 # SLAM already provides map -> odom; Nav2 must not start its own
                 # localisation or map server on top of it.
@@ -187,6 +200,29 @@ def generate_launch_description():
             package='kaya_bringup', executable='nvblox_map_loader',
             name='nvblox_map_loader', output='screen',
             parameters=[{'nvblox_map': LaunchConfiguration('nvblox_map')}],
+        ),
+
+        # ------------------------------------------------- saved 2D grid
+        # Serves the mapping run's occupancy grid as /map for the global
+        # costmap's static_layer. map_server is a lifecycle node and does
+        # nothing until something activates it, hence its own manager --
+        # nav2's navigation_launch.py manages only the navigation nodes.
+        Node(
+            package='nav2_map_server', executable='map_server', name='map_server',
+            condition=IfCondition(PythonExpression(
+                ["'", LaunchConfiguration('map_2d'), "' != ''"])),
+            output='screen',
+            parameters=[{'yaml_filename': LaunchConfiguration('map_2d'),
+                         'use_sim_time': False}],
+        ),
+        Node(
+            package='nav2_lifecycle_manager', executable='lifecycle_manager',
+            name='lifecycle_manager_map',
+            condition=IfCondition(PythonExpression(
+                ["'", LaunchConfiguration('map_2d'), "' != ''"])),
+            output='screen',
+            parameters=[{'autostart': True, 'node_names': ['map_server'],
+                         'use_sim_time': False}],
         ),
 
         # Cheap enough to leave on: sysfs reads at 1 Hz, no tegrastats process.
