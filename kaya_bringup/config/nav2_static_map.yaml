@@ -137,6 +137,19 @@ controller_server:
       yaw_goal_tolerance: 0.15
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
+      # HORIZON: 56 x 0.05 = 2.8 s, about 0.42 m of lookahead at vx_max.
+      # That looks far too short for threading a cluttered room, and raising it
+      # was TRIED AND MADE THINGS WORSE -- measured, on the same 3.5 m goal:
+      #
+      #   56 steps / batch 2000    stalled 0.62 m short ("Optimizer fail to
+      #                            compute path")
+      #   90 steps / batch 1400    stalled 2.71 m short, having driven only
+      #                            0.78 m, with "Failed to make progress"
+      #
+      # The longer horizon with fewer samples did not collide, it dithered:
+      # the progress checker gave up. Whatever is wrong here, lookahead is not
+      # it, and batch_size is not free to trade away. Left at the measured
+      # best; do not "fix" this again without a driven measurement.
       time_steps: 56
       model_dt: 0.05
       batch_size: 2000
