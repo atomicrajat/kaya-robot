@@ -109,3 +109,38 @@ health report over a dead source -- so:
 - **3D:** click the floor to place, drag to aim; shift-drag or right-drag orbits.
   The click is raycast onto the ground plane, so goals land where the robot can
   drive rather than on top of a wall.
+
+## Planner overlay, camera and Jetson load
+
+| panel | source | notes |
+|---|---|---|
+| green path | `/optimal_trajectory` | what MPPI will actually do next |
+| blue path | `/plan` | the global plan |
+| blue cloud | `/trajectories` | MPPI's sampled states |
+| camera | `/camera/color/image_raw/compressed` | JPEG, throttled to ~6 Hz |
+| Jetson load | `/kaya/jetson_stats` | CPU, GPU, RAM, temps at 1 Hz |
+
+Two things about `/trajectories` that cost time and are easy to repeat:
+
+- Nav2's TrajectoryVisualizer does **not** publish one LINE_STRIP per
+  trajectory. It publishes one SPHERE marker per sampled state, with the
+  position in `marker.pose.position` and `points[]` **empty** — measured at
+  **7656 markers in a single message**. Filtering for `len(points) >= 2` drops
+  every one of them, silently.
+- That message must be subscribed **RELIABLE**. It fragments into many UDP
+  datagrams, and a BEST_EFFORT subscriber discards the whole sample if one
+  fragment is lost: subscribed best-effort it delivered nothing across an
+  entire drive, while a reliable probe on the same topic received every
+  message. Only the camera is best-effort here.
+
+They are drawn as a cloud, not reassembled into curves, because the markers
+carry no trajectory id — grouping them means guessing run lengths, and a wrong
+guess draws confident lines through states from different rollouts.
+
+`jetson_stats` reads sysfs rather than parsing tegrastats. GPU load on Orin is
+per-mille in `/sys/devices/platform/gpu.0/load` (0-1000), not a percentage;
+reported raw it would show "537% GPU" and be believed.
+
+Map controls: scroll to zoom, right-drag or shift-drag to pan, "reset view" to
+recentre. Left-click still places a goal, so panning can never be confused with
+committing the robot to drive somewhere.

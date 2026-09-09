@@ -51,6 +51,11 @@
   button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
   .note { padding: 0 12px 12px; color: var(--dim); font-size: 12px; }
   .err { color: var(--warn); }
+  .bar { height: 5px; border-radius: 3px; background: #0b0f12; overflow: hidden;
+         border: 1px solid var(--line); min-width: 110px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .bar i.warn { background: var(--warn); }
+  .bar i.bad { background: var(--bad); }
   /* When the robot is gone the map is history, not telemetry, and must not
      read as live. */
   body.offline #view { filter: grayscale(.7) brightness(.55); }
@@ -83,7 +88,8 @@
     <div id="view">
       <canvas id="map2d"></canvas>
       <div id="view3d"></div>
-      <div class="hint" id="hint">click to set a goal · drag to aim heading</div>
+      <div class="hint" id="hint">click to set a goal · drag to aim heading · scroll to zoom · right-drag to pan</div>
+      <button class="tab" id="resetview" style="position:absolute;right:10px;bottom:10px;z-index:4">reset view</button>
       <div class="hint" id="hint3d" style="display:none">click the floor to set a goal · drag to aim · shift-drag or right-drag to orbit</div>
     </div>
   </div>
@@ -99,6 +105,20 @@
         Phase 10. Needs the keyframe store (Phase 9) first — the button is wired
         to the endpoint that will answer it.
       </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h2>Camera <span class="tabs"><button class="tab on" id="camtoggle">live</button></span></h2>
+      <div id="camwrap" style="position:relative;background:#0b0f12;line-height:0">
+        <img id="cam" style="width:100%;display:block" alt="">
+        <canvas id="camoverlay" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+      </div>
+      <div class="note" id="camnote">/camera/color/image_raw/compressed</div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h2>Jetson</h2>
+      <div class="rows" id="jetson"></div>
     </div>
 
     <div class="card" style="margin-bottom:12px">
@@ -125,6 +145,7 @@ const $ = s => document.querySelector(s);
 let state = null, baseImg = null, costImg = null, goal = null;
 let drag = null;               // {x, y} in map metres while aiming a heading
 let view = { scale: 1, ox: 0, oy: 0 };   // map metres -> canvas px
+let zoom = 1, pan = { x: 0, y: 0 }, panning = null;   // user's view on top of the fit
 
 function fitView(canvas) {
   // Fit the BASE map, so the frame never jumps around as the live costmap
@@ -134,9 +155,11 @@ function fitView(canvas) {
   const w = b.width * b.resolution, h = b.height * b.resolution;
   const pad = 20;
   const s = Math.min((canvas.width - 2 * pad) / w, (canvas.height - 2 * pad) / h);
-  view.scale = s;
-  view.ox = (canvas.width - w * s) / 2 - b.origin_x * s;
-  view.oy = (canvas.height + h * s) / 2 + b.origin_y * s;
+  // Zoom about the canvas centre, so scrolling does not walk the map away.
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  view.scale = s * zoom;
+  view.ox = cx + ((canvas.width - w * s) / 2 - b.origin_x * s - cx) * zoom + pan.x;
+  view.oy = cy + ((canvas.height + h * s) / 2 + b.origin_y * s - cy) * zoom + pan.y;
 }
 const toPx = (x, y) => [view.ox + x * view.scale, view.oy - y * view.scale];
 const toMap = (px, py) => [(px - view.ox) / view.scale, (view.oy - py) / view.scale];
@@ -172,6 +195,51 @@ function drawRobot(ctx) {
   ctx.beginPath(); ctx.arc(x, y, 16, 0, 7); ctx.stroke();
 }
 
+function stroke(ctx, pts, color, width, glow) {
+  if (!pts || pts.length < 2) return;
+  ctx.save();
+  ctx.lineJoin = ctx.lineCap = 'round';
+  if (glow) { ctx.shadowColor = color; ctx.shadowBlur = glow; }
+  ctx.strokeStyle = color; ctx.lineWidth = width;
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => { const [a, b] = toPx(x, y); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); });
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlan(ctx) {
+  if (!state) return;
+  // MPPI's sampled states, drawn as a cloud -- the "why" behind the chosen
+  // path. They are points, not curves: the markers carry no trajectory id.
+  const cand = state.candidates;
+  if (cand && cand.length) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(79,195,247,.20)';
+    ctx.shadowColor = 'rgba(79,195,247,.5)'; ctx.shadowBlur = 6;
+    const r = Math.max(1, Math.min(2.6, view.scale * 0.02));
+    cand.forEach(([x, y]) => {
+      const [a, b] = toPx(x, y);
+      ctx.beginPath(); ctx.arc(a, b, r, 0, 7); ctx.fill();
+    });
+    ctx.restore();
+  }
+  stroke(ctx, state.plan, 'rgba(79,195,247,.55)', 2.5, 8);        // global plan
+  stroke(ctx, state.optimal, '#7CFFB2', 3.5, 14);                  // what it will do now
+  // A pulse running along the chosen path, so direction of travel is obvious
+  // at a glance rather than inferred from the goal marker.
+  const p = state.optimal || state.plan;
+  if (p && p.length > 3) {
+    const t = (Date.now() % 1600) / 1600;
+    const i = Math.min(p.length - 1, Math.floor(t * (p.length - 1)));
+    const [x, y] = toPx(p[i][0], p[i][1]);
+    ctx.save();
+    ctx.shadowColor = '#7CFFB2'; ctx.shadowBlur = 18;
+    ctx.fillStyle = '#d8ffe9';
+    ctx.beginPath(); ctx.arc(x, y, 4.5, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+}
+
 function drawGoal(ctx) {
   const g = drag || goal;
   if (!g) return;
@@ -202,19 +270,38 @@ function render() {
   ctx.imageSmoothingEnabled = false;
   drawLayer(ctx, baseImg, state.base);
   drawLayer(ctx, costImg, state.costmap);
+  drawPlan(ctx);
   drawGoal(ctx);
   drawRobot(ctx);
 }
 
 // ---------------------------------------------------------------- click goal
 const cv = $('#map2d');
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY * 0.0015);
+  zoom = Math.max(0.4, Math.min(14, zoom * f));
+  render();
+}, { passive: false });
+cv.addEventListener('contextmenu', e => e.preventDefault());
 let down = null;
 cv.addEventListener('mousedown', e => {
+  // Right button or shift pans; left button places a goal. Panning must not be
+  // the same gesture as committing the robot to drive somewhere.
+  if (e.button === 2 || e.shiftKey) {
+    panning = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
+    return;
+  }
   const r = cv.getBoundingClientRect();
   const [x, y] = toMap(e.clientX - r.left, e.clientY - r.top);
   down = { x, y }; drag = { x, y, yaw: 0 }; render();
 });
 cv.addEventListener('mousemove', e => {
+  if (panning) {
+    pan.x = panning.px + (e.clientX - panning.x);
+    pan.y = panning.py + (e.clientY - panning.y);
+    render(); return;
+  }
   if (!down) return;
   const r = cv.getBoundingClientRect();
   const [x, y] = toMap(e.clientX - r.left, e.clientY - r.top);
@@ -222,6 +309,7 @@ cv.addEventListener('mousemove', e => {
   render();
 });
 cv.addEventListener('mouseup', async () => {
+  if (panning) { panning = null; return; }
   if (!down) return;
   const g = drag; down = null; drag = null; goal = g; render();
   $('#hint').textContent = 'sending goal…';
@@ -240,6 +328,7 @@ async function sendGoal(g) {
     return false;
   }
 }
+$('#resetview').onclick = () => { zoom = 1; pan = { x: 0, y: 0 }; render(); };
 $('#cancel').onclick = () => { goal = null; render();
   $('#hint').textContent = 'click to set a goal · drag to aim heading'; };
 
@@ -292,13 +381,51 @@ function paint() {
   $('#status').innerHTML = rows.map(([k, v]) => `<div class="row"><span>${k}</span><span>${v}</span></div>`).join('');
 }
 
+let camOn = true;
+$('#camtoggle').onclick = () => {
+  camOn = !camOn;
+  $('#camtoggle').classList.toggle('on', camOn);
+  $('#camtoggle').textContent = camOn ? 'live' : 'paused';
+  $('#cam').style.opacity = camOn ? 1 : 0.25;
+};
+function pollCam() {
+  if (!camOn || !state || !state.camera) return;
+  const i = new Image();
+  i.onload = () => { $('#cam').src = i.src; };
+  i.src = '/api/camera.jpg?t=' + Date.now();
+}
+setInterval(pollCam, 200);
+
+function bar(pct, warn, bad) {
+  const c = pct >= bad ? 'bad' : pct >= warn ? 'warn' : '';
+  return `<span class="bar" style="flex:1"><i class="${c}" style="width:${Math.min(100, pct)}%"></i></span>`;
+}
+function paintJetson() {
+  const j = state && state.jetson;
+  if (!j) {
+    $('#jetson').innerHTML = '<div class="row"><span>' +
+      (state && state.link === 'offline' ? 'robot offline' : 'waiting for /kaya/jetson_stats') +
+      '</span></div>';
+    return;
+  }
+  const m = j.mem || {}, t = j.temps_c || {};
+  const rows = [
+    ['CPU', (j.cpu_percent ?? 0).toFixed(0) + '%', bar(j.cpu_percent ?? 0, 80, 92)],
+    ['GPU', (j.gpu_percent ?? 0).toFixed(0) + '%', bar(j.gpu_percent ?? 0, 70, 90)],
+    ['RAM', `${m.used_mb ?? '?'} / ${m.total_mb ?? '?'} MB`, bar(m.percent ?? 0, 80, 90)],
+    ['temp', (t.tj ?? t.cpu ?? 0).toFixed(1) + ' °C', ''],
+  ];
+  $('#jetson').innerHTML = rows.map(([k, v, b]) =>
+    `<div class="row"><span>${k}</span><span style="display:flex;gap:8px;align-items:center">${b}<b>${v}</b></span></div>`).join('');
+}
+
 async function poll() {
   try {
     const r = await fetch('/api/state');
     state = await r.json();
     if (!baseImg && state.base) { baseImg = new Image(); baseImg.onload = render; baseImg.src = '/api/base.png'; }
     if (state.costmap) { const i = new Image(); i.onload = () => { costImg = i; render(); }; i.src = '/api/costmap.png?t=' + Date.now(); }
-    paint(); render();
+    paint(); paintJetson(); render();
   } catch (e) {
     pill($('#p-conn'), 'backend unreachable', 'bad');
   }

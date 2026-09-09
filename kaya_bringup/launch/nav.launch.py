@@ -189,6 +189,12 @@ def generate_launch_description():
             parameters=[{'nvblox_map': LaunchConfiguration('nvblox_map')}],
         ),
 
+        # Cheap enough to leave on: sysfs reads at 1 Hz, no tegrastats process.
+        Node(
+            package='kaya_bringup', executable='jetson_stats',
+            name='jetson_stats', output='log',
+        ),
+
         # ----------------------------------------------------------- Foxglove
         # A websocket view of the running stack, so the map and the robot's
         # position can be watched from the workstation. RViz on the robot needs

@@ -24,5 +24,6 @@ setup(
     entry_points={'console_scripts': [
         'cuvslam_origin_anchor = kaya_bringup.origin_anchor_node:main',
         'nvblox_map_loader = kaya_bringup.nvblox_map_loader_node:main',
+        'jetson_stats = kaya_bringup.jetson_stats_node:main',
     ]},
 )

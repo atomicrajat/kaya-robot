@@ -41,18 +41,21 @@ import json
 import math
 import os
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 
 from PIL import Image
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import OccupancyGrid, Path
+from sensor_msgs.msg import CompressedImage
+from visualization_msgs.msg import MarkerArray
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 import tf2_ros
 
 # The Isaac types live only on the robot -- neither isaac_ros_visual_slam_
@@ -81,6 +84,21 @@ STALE_S = 5.0
 LATCHED = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
                      reliability=ReliabilityPolicy.RELIABLE,
                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
+
+# Sensor streams are published BEST_EFFORT; a RELIABLE subscription silently
+# matches nothing and the panel stays empty with no error anywhere.
+SENSOR = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
+                    reliability=ReliabilityPolicy.BEST_EFFORT)
+
+# Large, fragmented messages need reliability to survive the wire.
+BULK = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
+                  reliability=ReliabilityPolicy.RELIABLE)
+
+# Paths are drawn, not analysed, so a few hundred points is plenty and keeps
+# the JSON small enough to poll twice a second.
+MAX_PATH_PTS = 300
+# The rollout cloud is ~7.6k states; this many reads the same at screen size.
+MAX_CANDIDATE_PTS = 700
 
 
 def load_base_map(stem):
@@ -118,6 +136,12 @@ class Dash(Node):
         self.costmap_png = None
         self.vio = None
         self.anchored = None
+        self.plan = None
+        self.optimal = None
+        self.candidates = None
+        self.jpeg = None
+        self.jpeg_t = 0.0
+        self.jetson = None
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
@@ -129,6 +153,21 @@ class Dash(Node):
                                      self.on_vio, 10)
         self.create_subscription(Bool, '/cuvslam_origin_anchor/anchored',
                                  self.on_anchored, LATCHED)
+        self.create_subscription(Path, '/plan', self.on_plan, 10)
+        self.create_subscription(Path, '/optimal_trajectory', self.on_optimal, 10)
+        # MPPI's candidate rollouts -- the cloud that makes the planner legible.
+        # RELIABLE on purpose, unlike the camera: one message carries ~7.6k
+        # markers, which fragments into many UDP datagrams, and BEST_EFFORT
+        # drops the entire sample if any one fragment is lost. Subscribed
+        # best-effort it delivered NOTHING across a whole drive while a
+        # reliable probe on the same topic received every message.
+        self.create_subscription(MarkerArray, '/trajectories',
+                                 self.on_candidates, BULK)
+        self.create_subscription(CompressedImage,
+                                 '/camera/color/image_raw/compressed',
+                                 self.on_jpeg, SENSOR)
+        self.create_subscription(String, '/kaya/jetson_stats',
+                                 self.on_jetson, 10)
         self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose', 10)
         self.base = load_base_map(BASE_MAP)
 
@@ -157,6 +196,57 @@ class Dash(Node):
                 'origin_x': m.info.origin.position.x,
                 'origin_y': m.info.origin.position.y,
             }
+
+    @staticmethod
+    def _thin(pts):
+        step = max(1, len(pts) // MAX_PATH_PTS)
+        return [[round(p.pose.position.x, 3), round(p.pose.position.y, 3)]
+                for p in pts[::step]]
+
+    def on_plan(self, m):
+        with self.lock:
+            self.plan = self._thin(m.poses)
+
+    def on_optimal(self, m):
+        with self.lock:
+            self.optimal = self._thin(m.poses)
+
+    def on_candidates(self, m):
+        """MPPI's candidate rollouts, as a cloud of sampled states.
+
+        Nav2's TrajectoryVisualizer does NOT publish one LINE_STRIP per
+        trajectory. It publishes one SPHERE marker per sampled state, with the
+        position in marker.pose.position and points[] EMPTY -- measured here at
+        7656 markers in a single message. A first version filtered for
+        len(points) >= 2 and silently dropped every one of them.
+
+        They are drawn as a cloud rather than reassembled into curves: the
+        markers carry no trajectory id, so grouping them means guessing at run
+        lengths, and a wrong guess would draw confident lines through states
+        that belong to different rollouts.
+        """
+        pts = [mk.pose.position for mk in m.markers if mk.action == 0]
+        step = max(1, len(pts) // MAX_CANDIDATE_PTS)
+        out = [[round(p.x, 3), round(p.y, 3)] for p in pts[::step]]
+        with self.lock:
+            self.candidates = out or None
+
+    def on_jpeg(self, m):
+        # Throttled: the browser polls at a few Hz, so keeping every frame off
+        # the wire to it costs nothing and keeps this cheap.
+        now = time.time()
+        if now - self.jpeg_t < 0.15:
+            return
+        with self.lock:
+            self.jpeg = bytes(m.data)
+            self.jpeg_t = now
+
+    def on_jetson(self, m):
+        try:
+            with self.lock:
+                self.jetson = json.loads(m.data)
+        except ValueError:
+            pass
 
     def on_vio(self, m):
         with self.lock:
@@ -243,6 +333,12 @@ def make_handler(node):
                         # the robot has quietly gone away.
                         'goal_subscribers': node.goal_pub.get_subscription_count(),
                         'anchored': node.anchored if link != 'offline' else None,
+                        'plan': node.plan if link != 'offline' else None,
+                        'optimal': node.optimal if link != 'offline' else None,
+                        'candidates': node.candidates if link != 'offline' else None,
+                        'jetson': node.jetson if link != 'offline' else None,
+                        'camera': (node.jpeg is not None
+                                   and time.time() - node.jpeg_t < 3.0),
                         'costmap': node.costmap,
                         'base': ({k: v for k, v in node.base.items() if k != 'png'}
                                  if node.base else None),
@@ -264,6 +360,13 @@ def make_handler(node):
                          else 'application/octet-stream')
                 with open(f, 'rb') as fh:
                     self._send(200, fh.read(), ctype, cache=True)
+            elif path == '/api/camera.jpg':
+                with node.lock:
+                    j = node.jpeg
+                if j is None:
+                    self._send(404, b'no frame', 'text/plain')
+                else:
+                    self._send(200, j, 'image/jpeg')
             elif path == '/api/costmap.png':
                 with node.lock:
                     png = node.costmap_png
