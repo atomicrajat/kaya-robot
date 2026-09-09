@@ -83,6 +83,21 @@
     #
     # The saved map is clean because it was built in MAPPING mode, where the
     # static_mapper's 0.05 was doing its job all along.
+    # GROUND-PLANE SLICING WAS TRIED AND IS WORSE. nvblox can place the slice
+    # relative to a floor it estimates rather than to a fixed height, via
+    # multi_mapper.experimental_use_ground_plane_estimation with
+    # slice_height_above_plane_m / slice_height_thickness_m. On paper it is the
+    # right answer to a polished floor and to cuVSLAM's z drift. Measured here
+    # it lost on both counts:
+    #
+    #   fixed slice 0.05-0.20      local costmap 44.8% unable to hold the
+    #                              footprint, goal missed by 0.43 m
+    #   plane + 0.05, 0.15 thick   53.2% unable to hold the footprint,
+    #                              goal missed by 1.07 m
+    #
+    # It is flagged experimental upstream, and this room may simply not give it
+    # a clean plane to fit. Left off; the numbers are here so it is not
+    # re-enabled on the strength of the idea alone.
     dynamic_mapper:
       esdf_slice_min_height: 0.05
       esdf_slice_max_height: 0.20

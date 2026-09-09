@@ -44,8 +44,26 @@ bt_navigator:
     robot_base_frame: base_footprint
     odom_topic: /odom
     bt_loop_duration: 10
-    default_server_timeout: 20
-    wait_for_service_timeout: 1000
+    # MEASURED FAILURE. At the stock 20 ms, bt_navigator gave up ~1 s into
+    # every long goal with
+    #
+    #   Timed out while waiting for action server to acknowledge goal request
+    #   for follow_path
+    #   [navigate_to_pose] [ActionServer] Aborting handle.
+    #   Goal failed
+    #
+    # 20 ms is how long controller_server gets to ACKNOWLEDGE a goal, and on
+    # this board it is mid-MPPI-solve when the request arrives. The robot still
+    # drove, because controller_server executes follow_path independently once
+    # it has the goal -- but the behaviour tree had already aborted, so NOTHING
+    # was supervising it: no replanning, no recovery, and behavior_server never
+    # activated a single spin, backup or wait across any run. That is why the
+    # robot stopped where it stopped instead of recovering and continuing.
+    #
+    # 500 ms is generous against a 20 Hz controller and costs nothing when the
+    # server is responsive: it is a ceiling on waiting, not a delay.
+    default_server_timeout: 500
+    wait_for_service_timeout: 3000
     action_server_result_timeout: 900.0
     navigators: ["navigate_to_pose", "navigate_through_poses"]
     navigate_to_pose:
