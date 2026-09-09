@@ -131,9 +131,10 @@
       <h2>Status</h2>
       <div class="rows" id="status"></div>
       <div class="note">
-        Base layer is the saved 202 m² map. Red is what Nav2 sees as blocked
-        right now, including obstacles that were not there when the map was
-        built.
+        Grey is the saved 202&nbsp;m² map. <b style="color:#ef5350">Red</b> = the
+        robot cannot be there. <b style="color:#ffa726">Amber</b> = passable but
+        discouraged (inflation). Both come from Nav2 live, so obstacles that
+        were not there when the map was built show up too.
       </div>
       <div class="rows"><button class="ghost" id="cancel">Clear goal marker</button></div>
     </div>

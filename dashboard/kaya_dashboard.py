@@ -189,10 +189,20 @@ class Dash(Node):
         # RGBA so unknown can be transparent and the base map show through --
         # that distinction is the whole point of having two layers.
         rgba = np.zeros((m.info.height, m.info.width, 4), dtype=np.uint8)
-        occ = a >= 65
-        free = (a >= 0) & (a < 65)
-        rgba[occ] = (239, 83, 80, 255)
-        rgba[free] = (38, 50, 56, 90)
+        # Four bands, not two. An earlier version painted everything >= 65 as
+        # solid red and every other KNOWN cell as a dark fill -- which was
+        # nearly invisible while the costmap held only the camera cone, and
+        # became a red blob hiding the base map entirely once the static layer
+        # made the whole 202 m^2 known. Lethal and "inflated but driveable"
+        # are different things and must not look the same.
+        lethal = a >= 99                       # inscribed: the robot cannot be here
+        near = (a >= 50) & (a < 99)            # graded cost: driveable, discouraged
+        low = (a > 0) & (a < 50)               # barely any cost
+        rgba[lethal] = (239, 83, 80, 210)
+        rgba[near] = (255, 167, 38, 70)
+        rgba[low] = (79, 195, 247, 26)
+        # cost 0 and unknown stay fully transparent so the saved map shows
+        # through -- that is the layer that makes the room legible.
         buf = BytesIO()
         # Row 0 of an OccupancyGrid is the BOTTOM row in map coordinates, so it
         # is flipped here rather than in the browser, where it would have to be
