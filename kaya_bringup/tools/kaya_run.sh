@@ -27,7 +27,18 @@ stop() {
     rm -f "$PGF"
   fi
   # Belt and braces: anything left from an earlier, less careful session.
-  pids=$(pgrep -f "nvblox|component_container|cuvslam_origin_anchor|kaya_bringup nav.launch" | tr "\n" " ")
+  #
+  # Matched on the EXECUTABLE path, never on a bare word. `pgrep -f` searches
+  # whole command lines, so a pattern like "nvblox" also matches the very
+  # command invoking this script -- `kaya_run.sh start nvblox_map:=...home.nvblx`
+  # contains it -- and the sweep then kills its own ssh session before it can
+  # start anything. That happened, and the launch silently never ran.
+  #
+  # Excluding this shell and its parent as well, so a future pattern that
+  # over-matches cannot repeat it.
+  self="^($$|$PPID)$"
+  pids=$(pgrep -f "nvblox_ros/nvblox_node|/component_container|kaya_bringup.origin_anchor|bin/ros2 launch kaya_bringup" \
+         | grep -Ev "$self" | tr "\n" " ")
   [ -n "$pids" ] && kill -9 $pids 2>/dev/null
   sleep 2
   echo "stopped; $(free -m | awk "/^Mem:/ {print \$7\" MB available\"}")"
