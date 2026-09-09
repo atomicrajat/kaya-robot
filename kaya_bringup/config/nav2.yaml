@@ -85,6 +85,18 @@ bt_navigator:
 
 controller_server:
   ros__parameters:
+    # NEXT SUSPECT, NOT YET TESTED. With default_server_timeout raised to
+    # 500 ms and confirmed applied on the running node, bt_navigator STILL
+    # timed out waiting for controller_server to acknowledge follow_path. Half
+    # a second is a very long time to answer an action request, so the node is
+    # saturated rather than slow: MPPI at 20 Hz with batch_size 2000 x 56 steps
+    # is more than this board can solve while also servicing its executor.
+    #
+    # The move to try is 10 Hz here with model_dt 0.1 to match (nav2 wants
+    # model_dt ~ 1/controller_frequency), which halves the duty cycle and keeps
+    # the 2.8 s horizon. It is untested, and the last two "obvious" controller
+    # changes both made things worse, so measure it on the same 3.5 m goal
+    # before believing it.
     controller_frequency: 20.0
     costmap_update_timeout: 0.30
     min_x_velocity_threshold: 0.001
