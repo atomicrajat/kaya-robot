@@ -225,7 +225,25 @@ controller_server:
         cost_weight: 3.0
         threshold_to_consider: 0.5
       PreferForwardCritic:
-        enabled: true
+        # DISABLED, and that is deliberate on a holonomic base.
+        # This critic penalises anything that is not forward motion. It exists
+        # for differential and ackermann robots, to stop them reversing. Kaya
+        # is omni -- motion_model is "Omni", vy_max is non-zero, and strafing
+        # is measured at 0.5 m lateral for -0.1 deg of heading change -- so
+        # this was penalising the exact manoeuvre that threads a cluttered
+        # room, and the config was effectively a CRUISING profile applied to
+        # precision work.
+        #
+        # ROBOTIS ship two MPPI profiles for their omni base and switch between
+        # them: a CurveController with PreferForwardCritic at 9.0 for long open
+        # runs, and an OmniController with it DISABLED for "holonomic agility
+        # in tight spaces and fine positioning". Their baseline is time_steps
+        # 56 / batch_size 2000, the same as here, which is also why raising the
+        # horizon was the wrong lever.
+        #
+        # Re-enable it only if this robot is given long open corridors to
+        # cruise, and then as a second profile rather than in place of this one.
+        enabled: false
         cost_power: 1
         cost_weight: 5.0
         threshold_to_consider: 0.5

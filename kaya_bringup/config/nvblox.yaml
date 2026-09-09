@@ -65,6 +65,29 @@
     mapping_type: dynamic
     esdf_mode: 2d
 
+    # THE DYNAMIC MAPPER NEEDS THE SAME SLICE, and for a long time it did not
+    # have it. mapping_type is "dynamic", so while NAVIGATING the costmap is
+    # fed by the dynamic mapper -- and every slice setting below was nested
+    # under static_mapper, which only applies to a deliberate mapping run.
+    # Read back from the running node, dynamic_mapper.esdf_slice_min_height
+    # was 0.0: the obstacle band started AT THE FLOOR PLANE.
+    #
+    # Measured consequence, on a corridor the saved 2D map calls free with
+    # 0.50-0.75 m of clearance: the live costmap put cost 66-79 across every
+    # cell of it and 0.00 m of clearance, and MPPI stalled 0.6-1.0 m short of
+    # the goal with "Optimizer fail to compute path" -- on both the reloaded
+    # .nvblx and the 2D grid, which is why swapping the map changed nothing.
+    # The hallway floor is polished tile; IR stereo matches its reflections and
+    # returns points just above the floor, and a slice starting at 0.0 fuses
+    # every one of them as an obstacle.
+    #
+    # The saved map is clean because it was built in MAPPING mode, where the
+    # static_mapper's 0.05 was doing its job all along.
+    dynamic_mapper:
+      esdf_slice_min_height: 0.05
+      esdf_slice_max_height: 0.20
+      esdf_slice_height: 0.10
+
     static_mapper:
       # 5 cm off the ground: the obstacle band starts here.
       #
