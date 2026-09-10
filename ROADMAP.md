@@ -331,6 +331,63 @@ and furniture may have moved. That is a hypothesis, not a finding.
 Do not record "relocalisation needs daylight" as a finding until step 1 says so.
 This project has already written that sentence once and had to retract it.
 
+### Navigation on a saved map: what works now, and what is still wrong
+
+A 3.5 m traverse across the room now completes. Three consecutive goals reached
+with zero tracking losses, final heading within 1 deg of the request, the robot
+arriving and stopping rather than hunting. Short hops still land to 5.5-6.2 cm;
+long traverses land to 17-20 cm.
+
+Getting there removed five real faults, each found by measurement:
+
+| fault | what it did | fix |
+|---|---|---|
+| nvblox layer in the GLOBAL costmap | an ESDF cannot say "I have not looked there", so everything outside the camera cone read as lethal and the planner could only plan inside the FOV | static map globally; nvblox is not a costmap source |
+| nvblox ESDF as the local obstacle layer | same blindness, locally | `VoxelLayer` on `/camera/depth/points`: mark, clear, leave unknown alone |
+| slice settings under `static_mapper` only | navigation uses the DYNAMIC mapper, whose slice started at 0.0 -- the floor plane -- so polished tile reflections fused as obstacles | give `dynamic_mapper` the same slice |
+| `wz_max: 1.0` | the controller satisfied heading by driving arcs; once it rotated fast enough to lose visual tracking and dead-reckoned the pose out past 13 km | 0.5 rad/s |
+| `xy_goal_tolerance: 0.10` | tighter than the robot's own 10.9 cm rotational excursion, so heading corrections always broke the position check | 0.15 m, set from that measurement |
+
+**The base was never at fault.** Commanded a pure in-place turn -- wz only,
+vx = vy = 0 -- it closes a full 360 deg with 1.7 cm of net translation.
+
+Two things are known broken and are NOT worked around:
+
+- **`default_server_timeout` is not the lever for the first-goal timeout.**
+  Tried at 500 ms and 2000 ms; `bt_navigator` still times out acknowledging the
+  first `follow_path` of a session, and only the first. The BT XML's action
+  nodes likely carry their own `server_timeout` port rather than inheriting the
+  blackboard value. Impact is bounded -- the first goal of each session runs
+  unsupervised, with no replanning or recovery.
+- **`map_server` loses a lifecycle race** on this board often enough to matter.
+  `map_server_guard` nudges it to active; the underlying race is unfixed.
+
+### What is left, in the order that matters
+
+1. **VIO stability is now the limiting factor, not planning.** On one traverse
+   the pose jumped 1.2 m in 4 s -- impossible at 0.15 m/s, no relocalisation
+   and no loop closure in the log, and immediately preceded by
+   `Delta between current and previous frame [133 ms]`, the camera dropping to
+   ~7 Hz. Glitches that size move the goal relative to the robot mid-run and
+   explain the wandering that survives every costmap and controller fix.
+   Measure the camera pipeline under load first; `/camera/depth/points` now has
+   TWO consumers, `VoxelLayer` and `collision_monitor`, and this project has
+   already been bitten once by the point cloud starving the camera.
+
+2. **A runtime pose sanity guard.** `origin_anchor_node` validates the pose at
+   localisation and refuses a bad one. Nothing watches it afterwards, so when
+   VIO diverged the robot kept driving on a pose that was fiction. The same
+   flat-floor check -- |z| and tilt -- applied continuously would have caught
+   it within a second and stopped the robot. This is the difference between a
+   failed run and a robot moving in the real world on invented coordinates.
+
+3. **Accuracy: 17-20 cm on a traverse against 5.5-6.2 cm on a short hop.** That
+   gap is drift accumulated over distance. Worth characterising against driven
+   length before tightening any tolerance.
+
+4. **The moved-furniture test has still never been run.** It is the requirement
+   that motivated the whole costmap rebuild and it remains unverified.
+
 ### Practical notes
 
 - **Charge fully.** Runtime tracks charge in: 2h30m, 1h50m, and under an hour
