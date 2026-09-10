@@ -83,7 +83,15 @@ bt_navigator:
     #
     # 500 ms is generous against a 20 Hz controller and costs nothing when the
     # server is responsive: it is a ceiling on waiting, not a delay.
-    default_server_timeout: 500
+    # 2000 ms. 500 was not enough: bt_navigator still timed out acknowledging
+    # the FIRST follow_path of each session, and only the first -- a second
+    # goal in the same session never times out. That signature is first-contact
+    # discovery between bt_navigator and controller_server, not load, and it
+    # cost the first goal of every run its supervision: the tree aborted while
+    # controller_server drove on unwatched, with no replanning and no recovery.
+    # This is a ceiling on waiting, not a delay, so a responsive server pays
+    # nothing for it.
+    default_server_timeout: 2000
     wait_for_service_timeout: 3000
     action_server_result_timeout: 900.0
     navigators: ["navigate_to_pose", "navigate_through_poses"]

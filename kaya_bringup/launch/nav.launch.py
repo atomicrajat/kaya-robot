@@ -215,6 +215,14 @@ def generate_launch_description():
             parameters=[{'yaml_filename': LaunchConfiguration('map_2d'),
                          'use_sim_time': False}],
         ),
+        # Belt and braces for the lifecycle race described in the guard node:
+        # the manager usually wins, and when it does this does nothing.
+        Node(
+            package='kaya_bringup', executable='map_server_guard',
+            name='map_server_guard', output='screen',
+            condition=IfCondition(PythonExpression(
+                ["'", LaunchConfiguration('map_2d'), "' != ''"])),
+        ),
         Node(
             package='nav2_lifecycle_manager', executable='lifecycle_manager',
             name='lifecycle_manager_map',
