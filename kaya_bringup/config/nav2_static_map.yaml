@@ -106,13 +106,13 @@ bt_navigator:
 
 controller_server:
   ros__parameters:
-    # 10 Hz, not 20. bt_navigator kept timing out waiting for
-    # controller_server to acknowledge follow_path even at a 500 ms timeout,
-    # which means the node is SATURATED rather than slow -- MPPI at 20 Hz was
-    # more than this board could solve while also servicing its own executor,
-    # and the cost of that was that the behaviour tree aborted every goal
-    # about a second in, so replanning and recovery never ran at all.
-    controller_frequency: 10.0
+    # 20 Hz. Dropping to 10 was tried, to stop bt_navigator timing out
+    # waiting for controller_server to acknowledge follow_path. It did not
+    # help: the timeout still happened exactly once per launch, and the same
+    # goal went from 0.31 m short to 1.21 m. The timeout is first-contact
+    # discovery between the two nodes, not saturation -- a SECOND goal in the
+    # same session never times out.
+    controller_frequency: 20.0
     costmap_update_timeout: 0.30
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
@@ -174,16 +174,11 @@ controller_server:
       # the progress checker gave up. Whatever is wrong here, lookahead is not
       # it, and batch_size is not free to trade away. Left at the measured
       # best; do not "fix" this again without a driven measurement.
-      # HORIZON HELD AT 2.8 s WHILE HALVING THE RATE.
-      # model_dt tracks 1/controller_frequency, so dropping to 10 Hz makes it
-      # 0.1. Left at 56 steps that would DOUBLE the horizon to 5.6 s, and a
-      # longer horizon has already been measured making things worse (90 steps
-      # stalled 2.71 m short against 0.62 m). So time_steps halves too: 28 x
-      # 0.1 = the same 2.8 s lookahead as 56 x 0.05, at half the samples per
-      # solve and half the solves per second -- about a quarter of the compute,
-      # with the horizon that actually performed best left untouched.
-      time_steps: 28
-      model_dt: 0.1
+      # 56 x 0.05 = 2.8 s, about 0.42 m of lookahead, and both directions
+      # away from this have been measured worse: 90 steps stalled 2.71 m short,
+      # 28 steps at 10 Hz stalled 1.21 m, against 0.31 m here.
+      time_steps: 56
+      model_dt: 0.05
       batch_size: 2000
       ax_max: 3.0
       ax_min: -3.0
@@ -455,7 +450,25 @@ global_costmap:
       height: 20
       origin_x: -10.0
       origin_y: -10.0
-      plugins: ["static_layer", "nvblox_layer", "inflation_layer"]
+      # NO nvblox_layer HERE, and that is the whole point.
+      #
+      # nvblox sees a forward-facing cone and decays what it has driven past,
+      # so it can only ever describe the neighbourhood. Asked to describe a
+      # 202 m^2 global costmap it paints everything it has not currently
+      # observed as LETHAL, which overrode the static map's free space:
+      # rendered side by side, the saved map showed an open corridor from the
+      # robot to the goal while the live global costmap showed '#' everywhere
+      # except a cone narrowing to nothing about 1 m ahead. The global planner
+      # could only ever plan inside the camera's field of view, which is why
+      # every long goal stalled a few metres out no matter which map was
+      # loaded -- the reloaded .nvblx behaved identically for the same reason.
+      #
+      # So: the global costmap describes the building, from the saved map. The
+      # LOCAL costmap keeps nvblox and handles what is actually in front of the
+      # robot now, including furniture that has moved since the map was built.
+      # That is the ordinary Nav2 split; nvblox was only ever meant to be the
+      # global obstacle source on a robot with no saved map at all.
+      plugins: ["static_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         enabled: True
