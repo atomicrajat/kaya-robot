@@ -146,7 +146,20 @@ controller_server:
     #  yaw_goal_tolerance: 0.25
     #  stateful: True
     general_goal_checker:
-      stateful: True
+      # stateful FALSE. With it true, the checker stops re-checking XY once
+      # position tolerance has been met and then only watches orientation --
+      # so the robot can latch inside 10 cm, keep manoeuvring to satisfy the
+      # goal heading, and finish somewhere else entirely while still reporting
+      # success.
+      #
+      # Measured: a 3.5 m goal passed through the target between samples, drove
+      # on, settled 0.60 m past it, and controller_server logged "Reached the
+      # goal!" from there. The same latch is what the circling near a goal was:
+      # position had stopped being checked, so nothing pulled it back.
+      #
+      # False makes the checker verify position AND orientation together at the
+      # moment it declares success, which is the only claim worth making.
+      stateful: False
       plugin: "nav2_controller::SimpleGoalChecker"
       # The stock 0.25 m is most of this robot's own 0.32 m width -- it would
       # report "arrived" while standing a full body-width from the goal, and
@@ -158,7 +171,16 @@ controller_server:
       # 0.10 m / 0.15 rad (8.6 deg) is comfortably inside what the pose
       # estimate supports while staying achievable for the controller.
       xy_goal_tolerance: 0.10
-      yaw_goal_tolerance: 0.15
+      # 0.25 rad (14 deg), nav2's own default, up from the 0.15 this started
+      # with. 0.15 was set when every goal was a short hop in open space and
+      # the robot arrived already pointing the right way. Arriving from a 3.5 m
+      # traverse it does not, and with stateful false -- position and heading
+      # having to hold at the SAME instant -- 8.6 deg was tight enough that the
+      # robot hunted: measured passing through the goal at 8.0 cm and 2.4 cm,
+      # well inside the 10 cm position tolerance, without ever being allowed to
+      # stop. Position accuracy is unchanged; only the heading gate is relaxed,
+      # and this base is holonomic so heading costs it nothing to correct later.
+      yaw_goal_tolerance: 0.25
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
       # HORIZON: 56 x 0.05 = 2.8 s, about 0.42 m of lookahead at vx_max.
@@ -196,7 +218,21 @@ controller_server:
       vx_max: 0.15
       vx_min: -0.15
       vy_max: 0.15          # non-zero ONLY because this base is holonomic
-      wz_max: 1.0
+      # 0.5 rad/s, not the drive node's full 1.0. This is a LOWER limit inside
+      # kaya_drive's clamp, not a change to it.
+      #
+      # Rotation is what loses this robot its localisation. On a 3.5 m traverse
+      # the controller rotated continuously while translating -- heading went
+      # +92 -> +166 -> -125 deg across the run -- and cuVSLAM reported "Visual
+      # tracking is lost", after which IMU-only dead reckoning integrated the
+      # pose out to kilometres. The camera was delivering frames about 66 ms
+      # apart under load rather than 33, so 1.0 rad/s is roughly 4 deg of
+      # rotation between frames, which is where feature matching gives up.
+      #
+      # Halving it halves the inter-frame rotation. Slower turns cost seconds;
+      # a lost tracker costs the whole run and leaves the robot driving on a
+      # pose that is fiction.
+      wz_max: 0.5
       iteration_count: 1
       prune_distance: 1.7
       # MEASURED, not guessed. cuVSLAM stamps its transforms with the CAMERA's
