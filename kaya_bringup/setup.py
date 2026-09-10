@@ -27,5 +27,6 @@ setup(
         'jetson_stats = kaya_bringup.jetson_stats_node:main',
         'map_server_guard = kaya_bringup.map_server_guard_node:main',
         'pose_guard = kaya_bringup.pose_guard_node:main',
+        'perception_throttle = kaya_bringup.perception_throttle_node:main',
     ]},
 )

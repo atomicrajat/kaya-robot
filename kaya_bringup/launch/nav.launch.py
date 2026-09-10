@@ -126,6 +126,11 @@ def generate_launch_description():
                               description='Passed through to the camera. See the note there: '
                                           'colour is the worst-behaved stream on this camera and '
                                           'navigation does not need it.'),
+        DeclareLaunchArgument('perception_rate_hz', default_value='2.0',
+                              description='Rate for /kaya/perception/*, the low-rate camera feed '
+                                          'for off-board detection. The roadmap\'s rule is 1-2 Hz '
+                                          'because a room does not change fast, and a remote '
+                                          'subscriber on the full-rate topics starves the robot.'),
         DeclareLaunchArgument('rviz', default_value='false'),
         DeclareLaunchArgument('foxglove', default_value='false',
                               description='Serve the stack to Foxglove Studio over the LAN, for '
@@ -249,6 +254,15 @@ def generate_launch_description():
             package='kaya_bringup', executable='pose_guard',
             name='pose_guard', output='screen',
             condition=IfCondition(LaunchConfiguration('nav2')),
+        ),
+
+        # Low-rate camera for OFF-BOARD perception. Without it a remote
+        # subscriber pulling the camera across wifi starves the robot's own
+        # pipeline -- see the node for the measurements.
+        Node(
+            package='kaya_bringup', executable='perception_throttle',
+            name='perception_throttle', output='log',
+            parameters=[{'rate_hz': LaunchConfiguration('perception_rate_hz')}],
         ),
 
         # Cheap enough to leave on: sysfs reads at 1 Hz, no tegrastats process.

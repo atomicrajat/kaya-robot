@@ -134,9 +134,13 @@ class Follower(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.create_subscription(CompressedImage,
-                                 '/camera/color/image_raw/compressed',
+                                 '/kaya/perception/color',
                                  self.on_rgb, SENSOR)
-        # COMPRESSED depth, not raw. The raw topic is 848x480 16-bit, about
+        # The THROTTLED topics, not the camera's own. See
+        # kaya_bringup/perception_throttle_node.py: a remote subscriber on the
+        # full-rate topics starves the robot's pipeline badly enough that
+        # collision_monitor stops the robot and TF falls behind. Compressed
+        # depth alone was not enough; the rate is what matters. The raw topic is 848x480 16-bit, about
         # 814 KB a frame at up to 30 Hz, and this node runs on the WORKSTATION,
         # so subscribing to it pulls roughly 20 MB/s across the wifi link.
         # Measured consequence: the robot's own DDS backed up and
@@ -151,9 +155,9 @@ class Follower(Node):
         # published correct goals, and the wheels never turned. The node broke
         # the robot by watching it.
         self.create_subscription(CompressedImage,
-                                 '/camera/depth/image_raw/compressedDepth',
+                                 '/kaya/perception/depth',
                                  self.on_depth, SENSOR)
-        self.create_subscription(CameraInfo, '/camera/color/camera_info',
+        self.create_subscription(CameraInfo, '/kaya/perception/camera_info',
                                  self.on_info, SENSOR)
         self.create_subscription(String, '/kaya/track_target',
                                  self.on_target, 10)
