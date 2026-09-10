@@ -1,5 +1,20 @@
 """Follow something named in words: "follow the red backpack".
 
+NAME WHAT IT LOOKS LIKE, NOT WHAT IT IS
+OWLv2 matches visual appearance to text, so the useful prompt describes the
+thing as it appears, not as it is catalogued. Measured on this robot against a
+dark blue book held up in front of the camera:
+
+    "a blue book"       not detected at all
+    "a book"            not detected at all
+    "a blue notebook"   not detected at all
+    "a blue board"      0.483, box exactly on the object
+
+It is a book. It looks like a board -- a plain dark rectangle, no title, no
+spine, held flat on. The model is right and the obvious prompt is wrong. If a
+target is not being acquired, try describing its shape and colour before
+concluding the detector cannot see it.
+
     source /opt/ros/jazzy/setup.bash
     ../perception_venv/bin/python perception/kaya_follower.py
 
@@ -78,7 +93,13 @@ class Follower(Node):
         self.declare_parameter('lost_after_s', 2.0)
         self.declare_parameter('republish_min_move_m', 0.15)
         self.declare_parameter('goal_rate_hz', 2.0)
-        self.declare_parameter('min_score', 0.12)
+        # 0.25, not the detector's permissive default. MEASURED on this
+        # robot: a real blue book held up scored 0.483 with an appearance-
+        # matched prompt, while phantom detections of curtains and wall edges
+        # in an empty room scored 0.10-0.12. A follower acting on 0.12 drives
+        # at a curtain, and "lost target stops" cannot save it because the
+        # target never existed.
+        self.declare_parameter('min_score', 0.25)
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('base_frame', 'base_footprint')
         # Off by default. Naming a target starts it; nothing about loading this
