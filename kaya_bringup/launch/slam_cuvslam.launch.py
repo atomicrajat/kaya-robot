@@ -59,9 +59,10 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_drive', default_value='true',
                               description='Bring up kaya_drive so the robot can be teleoperated.'),
         DeclareLaunchArgument('depth_for_nvblox', default_value='false',
-                              description='cuVSLAM itself needs only the stereo IR pair, so depth '
-                                          'and colour are off by default to save USB bandwidth and '
-                                          'GPU memory. Phase 5 sets this true because nvblox fuses '
+                              description='cuVSLAM itself needs only the stereo IR pair, so '
+                                          'depth and colour are off by default to save USB '
+                                          'bandwidth and GPU memory. Phase 5 sets this true '
+                                          'because nvblox fuses '
                                           'DEPTH -- without it nvblox has nothing to build a '
                                           'costmap from. See nav.launch.py.'),
         DeclareLaunchArgument('publish_odom_tf', default_value='true',
