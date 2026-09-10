@@ -66,24 +66,66 @@ OLLAMA = os.environ.get('OLLAMA_HOST', 'http://127.0.0.1:11434')
 MODEL = os.environ.get('KAYA_VLM', 'qwen2.5vl:7b')
 STORE = os.path.expanduser('~/work_projects/kaya_robot/keyframes')
 
-CAPTION_PROMPT = """You are the memory of a small indoor robot. This photo was
-taken by its camera as it drove through a home.
+# A KEYFRAME POSE IS WHERE THE CAMERA WAS, NOT WHERE THE THING IS.
+# The first version of this prompt asked for prose, and it conflated the two.
+# One frame taken at the mouth of a corridor described "a stainless steel
+# refrigerator against the wall, indicating a kitchen area" -- from 2.7 m away,
+# down the corridor -- while the frame actually standing in the kitchen, with
+# the sink and the cabinets in reach, hedged with "possibly a kitchen or a
+# hallway leading to a kitchen". Asked where to cook, a text match picks the
+# confident sentence, and the robot parks at the doorway looking in.
+#
+# So the caption is now structured, and the split that matters is HERE versus
+# BEYOND: what the robot is standing among, against what it can merely see from
+# there. A fridge in `beyond` is a signpost pointing at the kitchen. A sink in
+# `here` IS the kitchen.
+CAPTION_PROMPT = """You are the memory of a small indoor robot, about 30 cm
+tall. This photo is from its camera, looking forward, as it drove through a
+home.
 
-Describe this view in two or three sentences, for someone who will later ask
-questions like "where can I eat?" or "take me to the washbasin". So say:
+Reply with strict JSON only:
 
-- what kind of place this is (kitchen, hallway, bedroom, living room, doorway,
-  or unclear -- say unclear if it is unclear)
-- the furniture and objects you can actually see
-- anything that says what the place is FOR (a sink, a stove, a dining table,
-  a bed, a sofa, a desk, a washing machine)
+{
+  "room": "<kitchen | dining area | living room | bedroom | bathroom |
+            hallway | doorway | utility | workspace | unclear>",
+  "standing_in_it": <true if the robot is INSIDE that room, false if it is
+                     looking into it from a hallway, a doorway, or down a
+                     corridor>,
+  "here": ["<objects within about two metres, in the space the robot is
+             actually in>"],
+  "beyond": ["<objects clearly further away -- through a doorway, down a
+               corridor, in the next room>"],
+  "summary": "<one sentence describing this view>"
+}
 
-Describe only what is visible. Do not guess at rooms you cannot see. A view of
-a blank wall or a floor is a useful thing to record as exactly that."""
+The `here` / `beyond` split is the important part, so take care with it. A
+fridge glimpsed at the far end of a corridor belongs in `beyond`, and the room
+is then the corridor, not the kitchen. Only call the room a kitchen when the
+robot is among the kitchen things.
 
-ANSWER_PROMPT = """A small indoor robot has driven through a home and remembers
-these places. Each is a numbered place with a description of what its camera
-saw there.
+Judge distance by how large objects appear and by whether a doorway or wall
+edge sits between the camera and them. Describe only what is visible. A view of
+a blank wall or a stretch of floor is a useful thing to record as exactly that:
+"unclear" is a correct answer, and an honest one."""
+
+# There is deliberately NO rule below spelling out what eating or cooking needs.
+# One was tried -- "somewhere to eat is a dining table, somewhere to cook is a
+# sink, stove or counter" -- and it made the answers WORSE: it taught the model
+# that a sink means kitchen, and "take me to the washbasin" then chose a bedroom
+# over the bathroom. Removing it, eat, cook and washbasin all resolve correctly.
+# The model already knows what rooms are for. The only thing it was missing was
+# whether the robot was STANDING in one or looking into it from a corridor, and
+# that is what `here` and `beyond` supply.
+#
+# Hand-written domain rules are also exactly what would not survive a building
+# this store has never seen, which is the point of the whole exercise.
+#
+# Keep explanations like this one OUT of the prompt string. This note was first
+# written inside it, and since it names a wrong answer in passing, the model
+# read it and reproduced that wrong answer.
+ANSWER_PROMPT = """A small indoor robot has driven through a home and
+remembers these places. For each, `here` is what the robot was standing among
+and `beyond` is what it could only see from there.
 
 {places}
 
@@ -93,6 +135,18 @@ Pick the ONE place that best answers them, and reply with strict JSON only:
 
   {{"place": <number>, "confidence": <0.0 to 1.0>, "why": "<one short sentence>"}}
 
+How to choose, in order:
+
+1. Prefer a place whose `here` holds what the question is about, and where
+   `standing_in_it` is true. That is the robot actually being in the room.
+2. A thing in `beyond` is a SIGNPOST toward a place, not the place itself.
+   Never answer with a place that only sees the target from a distance while
+   another place in the list stands among it -- sending the robot to the
+   doorway when it could be in the room is a wrong answer, not a cautious one.
+3. Places hedge. A frame that says "possibly a kitchen" while listing a sink
+   and cabinets in `here` is a better kitchen than one that says "indicating a
+   kitchen area" about a fridge in `beyond`. Judge by the objects, not by how
+   confident the wording sounds.
 If NO place in the list answers the question, reply exactly:
 
   {{"place": null, "confidence": 0.0, "why": "<what is missing>"}}
@@ -144,9 +198,43 @@ def caption_one(store, kf, timeout=300):
         b64 = base64.b64encode(f.read()).decode()
     out = _post('/api/generate', {
         'model': MODEL, 'prompt': CAPTION_PROMPT, 'images': [b64],
-        'stream': False, 'options': {'temperature': 0.1},
+        'stream': False, 'format': 'json', 'options': {'temperature': 0.1},
     }, timeout=timeout)
-    return out['response'].strip()
+    raw = out['response'].strip()
+    try:
+        c = json.loads(raw)
+    except ValueError:
+        # Keep the prose rather than losing the frame; describe() copes.
+        return {'room': 'unclear', 'standing_in_it': False, 'here': [],
+                'beyond': [], 'summary': raw[:400]}
+    c.setdefault('room', 'unclear')
+    c.setdefault('standing_in_it', False)
+    for k in ('here', 'beyond'):
+        v = c.get(k) or []
+        c[k] = [str(x) for x in v] if isinstance(v, list) else [str(v)]
+    c.setdefault('summary', '')
+    return c
+
+
+def describe(p):
+    """One line per place, as the answering model sees it.
+
+    `here` and `beyond` are kept visibly separate, because collapsing them is
+    the exact mistake that parked the robot at a doorway looking at a fridge.
+    """
+    c = p.get('caption')
+    if isinstance(c, str):                       # a store from the prose era
+        return c.replace('\n', ' ')
+    c = c or {}
+    where = 'in it' if c.get('standing_in_it') else 'looking in from outside'
+    bits = ['%s (%s)' % (c.get('room', 'unclear'), where)]
+    if c.get('here'):
+        bits.append('here: ' + ', '.join(c['here']))
+    if c.get('beyond'):
+        bits.append('beyond (only visible from here): ' + ', '.join(c['beyond']))
+    if c.get('summary'):
+        bits.append(c['summary'].replace('\n', ' '))
+    return ' | '.join(bits)
 
 
 def caption_all(store=STORE, force=False, limit=None, log=print):
@@ -180,7 +268,7 @@ def caption_all(store=STORE, force=False, limit=None, log=print):
         with open(out_path, 'w') as f:
             json.dump(ordered, f, indent=1)
         log('  [%d/%d] (%+.2f, %+.2f) %s'
-            % (i, len(todo), kf['x'], kf['y'], text.replace('\n', ' ')[:90]))
+            % (i, len(todo), kf['x'], kf['y'], describe(rec)[:100]))
     log('captions.json now holds %d places' % len(have))
     return out_path
 
@@ -209,9 +297,8 @@ def ask(question, store=STORE, timeout=120):
                 'keyframe_store.py running, then: '
                 'python3 perception/scene_memory.py caption'}
 
-    listing = '\n'.join(
-        '%d. %s' % (i, p['caption'].replace('\n', ' '))
-        for i, p in enumerate(places, 1))
+    listing = '\n'.join('%d. %s' % (i, describe(p))
+                        for i, p in enumerate(places, 1))
     out = _post('/api/generate', {
         'model': MODEL,
         'prompt': ANSWER_PROMPT.format(places=listing, question=question),
@@ -238,7 +325,7 @@ def ask(question, store=STORE, timeout=120):
         'ok': True, 'found': True, 'question': question,
         'x': p['x'], 'y': p['y'], 'yaw_deg': p['yaw_deg'],
         'yaw': math.radians(p['yaw_deg']),
-        'file': p['file'], 'caption': p['caption'],
+        'file': p['file'], 'caption': describe(p),
         'confidence': pick.get('confidence'), 'why': pick.get('why', ''),
     }
 
@@ -277,7 +364,7 @@ def main():
     print('%s\n  -> (%+.2f, %+.2f) yaw %+.0f deg   confidence %s'
           % (r['why'], r['x'], r['y'], r['yaw_deg'], r['confidence']))
     print('  %s' % r['file'])
-    print('  %s' % r['caption'].replace('\n', ' '))
+    print('  %s' % r['caption'])
 
 
 if __name__ == '__main__':
