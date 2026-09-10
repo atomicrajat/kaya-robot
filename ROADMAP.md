@@ -182,9 +182,30 @@ Verified on the acceptance questions below, all six right — including refusing
 to invent a swimming pool. Answering and driving are separate: the dashboard
 shows the remembered photo and the pose, and you press Go.
 
-**Still to prove:** the drive itself. The store is in a session frame (see
-`keyframes/FRAME.md`), so it needs the robot on the mark and a launch with no
-map_path.
+**Proven end to end 2026-09-10.** Robot on the mark, fresh frame, anchor read
+(-0.004, -0.002) yaw +0.1 against the store's origin of (-0.008, 0.002) -- a
+5 mm agreement, so the stored poses were valid. Asked "where can I eat", it
+picked the kitchen keyframe at (-0.61, +4.73), drove 4.8 m, and Nav2 reported
+Reached the goal!
+
+Final error 22.6 cm, which is a REGRESSION against the 6.3 cm measured in
+Phase 8, and the shape of it says where it came from. The robot arrived clean:
+one sample reads exactly 0.00 m at (-0.61, +4.73). It then drifted 22 cm during
+the final rotate-to-goal-heading, with this immediately before the verdict:
+
+    Rotation Shim Controller ... TF failed to transform into base frame!
+    Reached the goal!
+
+Pure in-place rotation was measured at 1.7 cm net over 360 deg, so an 87 deg
+turn cannot physically produce 22 cm. This is the pose estimate moving, not the
+robot -- the ~400 ms camera stall under load, landing on the last action of the
+run. Final yaw was also 16 deg off a 14.3 deg tolerance, consistent with the
+same lag.
+
+It also wandered for the first ~66 s before setting off, oscillating around
+(0.3-0.9, 0.6-1.0) without approaching the goal, then drove a clean straight
+line from (-0.11, 1.38) to (-0.38, 3.08). Both behaviours are navigation's, not
+this phase's.
 
 Original plan: question -> shortlist keyframes -> reasoning model picks one ->
 send its pose as a Nav2 goal. A CLIP-class local pre-filter to keep the
