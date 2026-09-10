@@ -168,10 +168,28 @@ and they survive a restart.
 drift on a driven loop, because this project has twice been surprised by a
 change that looked free.
 
-### Phase 10 — Ask in words
-Query path: question -> shortlist keyframes -> reasoning model picks one ->
-send its pose as a Nav2 goal. Cloud vision model to start; a CLIP-class local
-pre-filter to keep the shortlist small once there are many keyframes.
+### Phase 10 — Ask in words  — WORKING 2026-09-10
+
+`perception/scene_memory.py`, wired to the dashboard's Ask box. Not a cloud
+model in the end: qwen2.5vl:7b under ollama on the workstation's 24 GB card.
+
+The build that matters is **caption once, query many**. Captioning all 62
+places took 1m58s and happens after a drive; a question after that is text
+against text, about a second, and flat in the size of the store. Sending the
+images per-question would have been over a minute per question, forever.
+
+Verified on the acceptance questions below, all six right — including refusing
+to invent a swimming pool. Answering and driving are separate: the dashboard
+shows the remembered photo and the pose, and you press Go.
+
+**Still to prove:** the drive itself. The store is in a session frame (see
+`keyframes/FRAME.md`), so it needs the robot on the mark and a launch with no
+map_path.
+
+Original plan: question -> shortlist keyframes -> reasoning model picks one ->
+send its pose as a Nav2 goal. A CLIP-class local pre-filter to keep the
+shortlist small once there are many keyframes is still the right move at
+several hundred places; at 62 it is not needed.
 
 **Done when:** "show me where I can cook" drives the robot to the kitchen, and
 "take me to the washbasin" drives it to the sink.
