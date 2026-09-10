@@ -26,5 +26,6 @@ setup(
         'nvblox_map_loader = kaya_bringup.nvblox_map_loader_node:main',
         'jetson_stats = kaya_bringup.jetson_stats_node:main',
         'map_server_guard = kaya_bringup.map_server_guard_node:main',
+        'pose_guard = kaya_bringup.pose_guard_node:main',
     ]},
 )

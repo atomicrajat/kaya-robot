@@ -214,7 +214,43 @@ controller_server:
       # and this base is holonomic so heading costs it nothing to correct later.
       yaw_goal_tolerance: 0.25
     FollowPath:
-      plugin: "nav2_mppi_controller::MPPIController"
+      # RotationShimController WRAPS MPPI, and exists for exactly the behaviour
+      # this robot was not doing.
+      #
+      # MPPI is a sampling optimiser: it draws ~2000 random velocity
+      # trajectories over a 2.8 s horizon and takes a weighted average of the
+      # cheap ones. It has no concept of "rotate, then translate" -- only a
+      # locally cheap blend of vx, vy and wz -- and since turning while driving
+      # is usually cheaper than stopping to turn, it arcs. Nothing in the critic
+      # set rewards spinning on the spot. On this robot that meant sweeping arcs
+      # out to the side on the way to a goal, and at the goal it satisfied
+      # heading by driving rather than turning, which is what left it 0.60 m
+      # past the target and, on one run, rotating fast enough while translating
+      # to lose visual tracking entirely.
+      #
+      # The shim rotates IN PLACE until the robot faces the path, then hands off
+      # to MPPI for the straight run, and with rotate_to_goal_heading it does
+      # the same at the goal. That is the behaviour an omni base should have had
+      # all along -- and this base can do it: commanded a pure in-place turn it
+      # closes 360 deg with 1.7 cm of net translation.
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "nav2_mppi_controller::MPPIController"
+      # Rotate in place when the path heads more than ~29 deg away from where
+      # the robot points. Below that, arcing there is not worth a full stop.
+      angular_dist_threshold: 0.5
+      forward_sampling_distance: 0.5
+      # Matched to wz_max deliberately. Rotation speed is what cost this robot
+      # its localisation once already; the shim must not reintroduce a faster
+      # turn than the rest of the stack is allowed.
+      rotate_to_heading_angular_vel: 0.5
+      max_angular_accel: 3.2
+      simulate_ahead_time: 1.0
+      # Turn in place at the goal too, instead of driving an arc to satisfy the
+      # final heading.
+      rotate_to_goal_heading: true
+      closed_loop: true
+
+      # ---- MPPI below, used once the robot is pointing the right way ----
       # HORIZON: 56 x 0.05 = 2.8 s, about 0.42 m of lookahead at vx_max.
       # That looks far too short for threading a cluttered room, and raising it
       # was TRIED AND MADE THINGS WORSE -- measured, on the same 3.5 m goal:

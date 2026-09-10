@@ -233,6 +233,15 @@ def generate_launch_description():
                          'use_sim_time': False}],
         ),
 
+        # Watches the pose while driving and cancels navigation if it stops
+        # being physically possible. Only useful with Nav2 running, since
+        # cancelling is how it stops the robot.
+        Node(
+            package='kaya_bringup', executable='pose_guard',
+            name='pose_guard', output='screen',
+            condition=IfCondition(LaunchConfiguration('nav2')),
+        ),
+
         # Cheap enough to leave on: sysfs reads at 1 Hz, no tegrastats process.
         Node(
             package='kaya_bringup', executable='jetson_stats',
