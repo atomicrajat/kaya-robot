@@ -46,7 +46,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 
 from PIL import Image
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Twist
 from nav_msgs.msg import OccupancyGrid, Path
 from sensor_msgs.msg import CompressedImage
 from visualization_msgs.msg import MarkerArray
@@ -101,6 +101,13 @@ MAX_PATH_PTS = 300
 MAX_CANDIDATE_PTS = 700
 # A plan that stopped arriving is not a plan; Nav2 sends no empty Path on abort.
 PLAN_STALE_S = 2.0
+# A held teleop command expires this fast. The browser re-sends while a key or
+# button is down; if it stops for any reason the robot stops with it.
+TELEOP_TIMEOUT_S = 0.5
+# Well under the 0.15 m/s Nav2 uses: a human driving from a camera view has far
+# less situational awareness than the planner does.
+TELEOP_VX = 0.10
+TELEOP_WZ = 0.4
 
 
 def load_base_map(stem):
@@ -148,6 +155,9 @@ class Dash(Node):
         self.jpeg_t = 0.0
         self.jetson = None
         self.track = None
+        self.manual = False
+        self.teleop_t = 0.0
+        self.teleop_cmd = (0.0, 0.0, 0.0)
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
@@ -179,6 +189,14 @@ class Dash(Node):
         # Naming a target here is what starts following; the follower node
         # does nothing until it receives one.
         self.target_pub = self.create_publisher(String, '/kaya/track_target', 10)
+        # Teleop publishes into cmd_vel_smoothed, NOT cmd_vel, so
+        # collision_monitor still sits between the operator and the wheels.
+        # Driving by hand is exactly when a last-resort safety layer earns its
+        # place, and this project already has one configured.
+        self.teleop_pub = self.create_publisher(Twist, '/cmd_vel_smoothed', 10)
+        # DEADMAN: a browser that closes, freezes or loses wifi must not leave
+        # the robot driving.
+        self.create_timer(0.1, self.teleop_tick)
         self.base = load_base_map(BASE_MAP)
 
     # ------------------------------------------------------------ ROS inputs
@@ -263,6 +281,28 @@ class Dash(Node):
         with self.lock:
             self.jpeg = bytes(m.data)
             self.jpeg_t = now
+
+    def teleop_tick(self):
+        if not self.manual:
+            return
+        vx, vy, wz = self.teleop_cmd
+        if time.time() - self.teleop_t > TELEOP_TIMEOUT_S:
+            vx = vy = wz = 0.0
+            self.teleop_cmd = (0.0, 0.0, 0.0)
+        t = Twist()
+        t.linear.x, t.linear.y, t.angular.z = vx, vy, wz
+        self.teleop_pub.publish(t)
+
+    def cancel_navigation(self):
+        """Stop Nav2 through its own action, not by fighting for /cmd_vel."""
+        try:
+            from action_msgs.srv import CancelGoal
+            cli = self.create_client(CancelGoal,
+                                     '/navigate_to_pose/_action/cancel_goal')
+            if cli.service_is_ready():
+                cli.call_async(CancelGoal.Request())
+        except Exception as e:                        # noqa: BLE001
+            self.get_logger().warn('could not cancel navigation: %r' % e)
 
     def fresh(self, value, stamp, max_age=None):
         """Return a value only while it is still arriving.
@@ -391,6 +431,7 @@ def make_handler(node):
                         'track': node.fresh(node.track,
                                             (node.track or {}).get('t', 0), 3.0),
                         'follower': node.target_pub.get_subscription_count() > 0,
+                        'manual': node.manual,
                         'camera': (node.jpeg is not None
                                    and time.time() - node.jpeg_t < 3.0),
                         'costmap': node.costmap,
@@ -445,6 +486,32 @@ def make_handler(node):
                     }).encode(), 'application/json')
                     return
                 node.send_goal(req['x'], req['y'], req.get('yaw', 0.0))
+                self._send(200, json.dumps({'ok': True}).encode(),
+                           'application/json')
+            elif self.path == '/api/mode':
+                want = bool(req.get('manual'))
+                node.manual = want
+                node.teleop_cmd = (0.0, 0.0, 0.0)
+                node.teleop_t = 0.0
+                if want:
+                    # Entering manual cancels whatever Nav2 is doing, so the
+                    # planner and the operator never drive at the same time.
+                    node.cancel_navigation()
+                node.get_logger().info(
+                    'manual control %s' % ('ENGAGED' if want else 'released'))
+                self._send(200, json.dumps({'ok': True, 'manual': want}).encode(),
+                           'application/json')
+            elif self.path == '/api/teleop':
+                if not node.manual:
+                    self._send(409, json.dumps({
+                        'ok': False, 'error': 'not in manual mode'}).encode(),
+                        'application/json')
+                    return
+                node.teleop_cmd = (
+                    max(-1.0, min(1.0, float(req.get('vx', 0.0)))) * TELEOP_VX,
+                    max(-1.0, min(1.0, float(req.get('vy', 0.0)))) * TELEOP_VX,
+                    max(-1.0, min(1.0, float(req.get('wz', 0.0)))) * TELEOP_WZ)
+                node.teleop_t = time.time()
                 self._send(200, json.dumps({'ok': True}).encode(),
                            'application/json')
             elif self.path == '/api/track':
