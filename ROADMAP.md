@@ -383,6 +383,23 @@ Turning colour off with `enable_color:=false` balances the pair, and the
 3.5 m traverse went from ~20 cm to **6.3 cm**, matching the short-hop accuracy
 for the first time, with zero tracking losses and zero pose-guard trips.
 
+Colour is not free at any rate, and the cost is linear. Same 3.5 m goal, same
+start, only `color_fps` changed:
+
+| colour | traverse accuracy | colour usable |
+|---|---|---|
+| off | **6.3 cm** | no |
+| **5 fps** | **10.5 cm** | yes |
+| 15 fps | 14.7 cm | yes |
+| 30 fps | ~20 cm | yes |
+
+Every colour frame is bandwidth taken from cuVSLAM's stereo pair, so there is
+no setting that is free -- only a choice. 5 fps is the default because it is
+the cheapest colour that still feeds everything that needs it: the dashboard
+polls about 6 Hz, the roadmap's own rule for detection is 1-2 Hz, and a
+reasoning model wants single frames on demand. `enable_color:=false` buys the
+last 4 cm for a mapping run or a docking manoeuvre.
+
 Two things this did NOT fix, so they are still open:
 
 - **~400 ms stalls.** Under load every camera stream freezes together for up to
