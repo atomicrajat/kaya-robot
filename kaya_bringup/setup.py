@@ -25,6 +25,7 @@ setup(
         'cuvslam_origin_anchor = kaya_bringup.origin_anchor_node:main',
         'nvblox_map_loader = kaya_bringup.nvblox_map_loader_node:main',
         'jetson_stats = kaya_bringup.jetson_stats_node:main',
+        'camera_tuner = kaya_bringup.camera_tuner_node:main',
         'map_server_guard = kaya_bringup.map_server_guard_node:main',
         'pose_guard = kaya_bringup.pose_guard_node:main',
         'perception_throttle = kaya_bringup.perception_throttle_node:main',

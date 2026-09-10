@@ -186,6 +186,15 @@ def generate_launch_description():
             condition=IfCondition(EqualsSubstitution(LaunchConfiguration('slam'), 'rtabmap')),
         ),
 
+        # ------------------------------------------------------- camera tuner
+        # Applies the camera settings that launch_arguments silently drops --
+        # notably enable_ir_long_exposure, which stays true otherwise and caps
+        # the IR pair at ~20 Hz. See camera_tuner_node.py.
+        Node(
+            package='kaya_bringup', executable='camera_tuner',
+            name='camera_tuner', output='screen',
+        ),
+
         # ------------------------------------------------------------- nvblox
         # The cuVSLAM route runs the camera with depth OFF (it only needs the
         # stereo IR pair), so nvblox needs depth re-enabled to have anything to

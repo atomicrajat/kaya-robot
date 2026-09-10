@@ -146,12 +146,12 @@
     </div>
 
     <div class="card" style="margin-bottom:12px">
-      <h2>Camera <span class="tabs"><button class="tab on" id="camtoggle">live</button></span></h2>
+      <h2>Camera <span class="tabs"><button class="tab" id="camtoggle">paused</button></span></h2>
       <div id="camwrap" style="position:relative;background:#0b0f12;line-height:0">
         <img id="cam" style="width:100%;display:block" alt="">
         <canvas id="camoverlay" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
       </div>
-      <div class="note" id="camnote">/camera/color/image_raw/compressed</div>
+      <div class="note" id="camnote">press <b>live</b> to stream</div>
     </div>
 
     <div class="card" style="margin-bottom:12px">
@@ -481,23 +481,43 @@ function paint() {
   rows.push(['navigator', state.goal_subscribers > 0
     ? state.goal_subscribers + ' subscribed' : 'NOT subscribed']);
   if (goal) rows.push(['goal', `${goal.x.toFixed(2)}, ${goal.y.toFixed(2)}`]);
+  if (state && state.camera_source) {
+    $('#camnote').textContent = camOn
+      ? state.camera_source + ' — /kaya/perception/ir at 2 Hz'
+      : 'press live to stream (' + state.camera_source + ' available)';
+  }
   $('#status').innerHTML = rows.map(([k, v]) => `<div class="row"><span>${k}</span><span>${v}</span></div>`).join('');
 }
 
-let camOn = true;
+// The view starts PAUSED and pulls frames only while it is on. Every frame is
+// a request across wifi to a robot that is usually driving, and this panel is
+// not what anyone is watching most of the time.
+//
+// The robot-side cost is zero either way: the picture is the IR stream that
+// cuVSLAM already runs on, republished at 2 Hz. Colour would cost far more --
+// measured, colour at 5 fps halves the IR rate and puts the goal checker back
+// in the failure that made the robot stop short and report success.
+let camOn = false;
 $('#camtoggle').onclick = () => {
   camOn = !camOn;
   $('#camtoggle').classList.toggle('on', camOn);
   $('#camtoggle').textContent = camOn ? 'live' : 'paused';
   $('#cam').style.opacity = camOn ? 1 : 0.25;
+  if (camOn) pollCam();
 };
+$('#cam').style.opacity = 0.25;
+
 function pollCam() {
-  if (!camOn || !state || !state.camera) return;
+  if (!camOn || document.hidden || !state || !state.camera) return;
   const i = new Image();
   i.onload = () => { $('#cam').src = i.src; };
   i.src = '/api/camera.jpg?t=' + Date.now();
 }
 setInterval(pollCam, 200);
+// Stop pulling frames when the tab is not on screen.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && camOn) pollCam();
+});
 
 function bar(pct, warn, bad) {
   const c = pct >= bad ? 'bad' : pct >= warn ? 'warn' : '';

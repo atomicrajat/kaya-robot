@@ -166,6 +166,7 @@ class Dash(Node):
         self.candidates_t = 0.0
         self.jpeg = None
         self.jpeg_t = 0.0
+        self.jpeg_src = None
         self.jetson = None
         self.track = None
         self.manual = False
@@ -192,9 +193,14 @@ class Dash(Node):
         # reliable probe on the same topic received every message.
         self.create_subscription(MarkerArray, '/trajectories',
                                  self.on_candidates, BULK)
+        # Colour when it is running, IR otherwise. Colour is OFF whenever the
+        # robot is navigating -- at 5 fps it halves the IR rate cuVSLAM needs
+        # -- so IR is the normal live view, not the fallback.
         self.create_subscription(CompressedImage,
                                  '/camera/color/image_raw/compressed',
                                  self.on_jpeg, SENSOR)
+        self.create_subscription(CompressedImage, '/kaya/perception/ir',
+                                 self.on_ir, SENSOR)
         self.create_subscription(String, '/kaya/jetson_stats',
                                  self.on_jetson, 10)
         self.create_subscription(String, '/kaya/track_status', self.on_track, 10)
@@ -294,6 +300,19 @@ class Dash(Node):
         with self.lock:
             self.jpeg = bytes(m.data)
             self.jpeg_t = now
+            self.jpeg_src = 'colour'
+
+    def on_ir(self, m):
+        # IR only fills in when colour is not arriving. Colour is the better
+        # picture; IR is the one that is always there, because it is what
+        # cuVSLAM runs on and it is never turned off.
+        now = time.time()
+        if now - self.jpeg_t < 0.4:
+            return
+        with self.lock:
+            self.jpeg = bytes(m.data)
+            self.jpeg_t = now
+            self.jpeg_src = 'infrared'
 
     def teleop_tick(self):
         if not self.manual:
@@ -428,6 +447,7 @@ def make_handler(node):
                         # no error, which is exactly what it looks like when
                         # the robot has quietly gone away.
                         'goal_subscribers': node.goal_pub.get_subscription_count(),
+                        'camera_source': node.jpeg_src,
                         'anchored': node.anchored if link != 'offline' else None,
                         # Nav2 does not publish an empty Path when a goal is
                         # aborted, so a plan that stopped arriving stays in
