@@ -20,12 +20,16 @@ approaches that wander.
 WHAT IT CHECKS, and why each one
   Z and TILT      This robot drives on a flat floor. A map pose 0.5 m
                   underground or rolled 40 deg is not a pose, it is a failure
-                  wearing one. Same check origin_anchor_node applies at
-                  localisation; there is no reason it should stop being true
-                  a minute later.
-  SPEED           Implied speed between consecutive transforms. vx_max and
-                  vy_max are 0.15 m/s, so about 0.21 m/s on the diagonal.
-                  Anything far above that was not travelled.
+                  wearing one. The limits are LOOSER than the anchor's, because
+                  the anchor judges a stationary robot and this one judges a
+                  turning robot under load, where the estimate transiently
+                  swings much further and then recovers -- measured at 0.199 m
+                  of z and 8.7 deg of roll on an ordinary 360 deg turn that
+                  ended 2.2 cm from where it started.
+  SPEED           Implied speed between consecutive transforms, and the
+                  sharpest of the three. vx_max and vy_max are 0.15 m/s, so
+                  about 0.21 m/s diagonally; the diverging run showed
+                  1.26 m/s. Nothing recoverable looks like that.
 
 WHAT IT DOES ABOUT IT
 Cancels whatever Nav2 is executing, through the navigate_to_pose action's own
@@ -66,9 +70,26 @@ class PoseGuard(Node):
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('rate_hz', 10.0)
-        # Same limits origin_anchor_node uses when it accepts a localisation.
-        self.declare_parameter('max_z_m', 0.10)
-        self.declare_parameter('max_tilt_deg', 8.0)
+        # NOT the anchor's limits. origin_anchor_node judges a STATIONARY
+        # robot at the moment of localisation, where 0.10 m and 8 deg are
+        # generous. This node judges a MOVING one, and rotation under load
+        # transiently pushes the estimate much further than that.
+        #
+        # Measured, same commanded 360 deg in-place turn, nav2 off then on:
+        #
+        #               worst |roll|   worst |pitch|   worst |z|   net drift
+        #   nav2 off        3.0 deg        1.9 deg      0.026 m      1.1 cm
+        #   nav2 loaded     8.7 deg        7.7 deg      0.199 m      2.2 cm
+        #
+        # Both turns ENDED fine -- 2.2 cm of net translation under load -- so
+        # those are recoverable transients, not divergence. At 0.10 m and 8 deg
+        # this node tripped on an ordinary turn and cancelled navigation.
+        # 0.30 m and 15 deg clear the measured transient with margin while
+        # still being nowhere near the failures worth catching: the run that
+        # dead-reckoned to 13 km passed 0.5 m of z and 72 deg of roll on its
+        # way out.
+        self.declare_parameter('max_z_m', 0.30)
+        self.declare_parameter('max_tilt_deg', 15.0)
         # vx_max and vy_max are 0.15, so ~0.21 m/s diagonally. 0.6 leaves room
         # for TF timing jitter without admitting anything that could be real.
         self.declare_parameter('max_speed_m_s', 0.6)
