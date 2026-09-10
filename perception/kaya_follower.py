@@ -76,7 +76,7 @@ import rclpy                                                      # noqa: E402
 from rclpy.node import Node                                       # noqa: E402
 from rclpy.qos import (HistoryPolicy, QoSProfile,                 # noqa: E402
                        ReliabilityPolicy)
-from sensor_msgs.msg import CameraInfo, CompressedImage, Image    # noqa: E402
+from sensor_msgs.msg import CameraInfo, CompressedImage           # noqa: E402
 from std_msgs.msg import String                                   # noqa: E402
 import tf2_ros                                                    # noqa: E402
 from tf2_geometry_msgs import do_transform_point                  # noqa: E402
@@ -90,7 +90,15 @@ class Follower(Node):
     def __init__(self):
         super().__init__('kaya_follower')
         self.declare_parameter('standoff_m', 1.0)
-        self.declare_parameter('lost_after_s', 2.0)
+        # 5 s, not 2. MEASURED: with a real target being carried around,
+        # gaps of 2.0-2.5 s between accepted detections were common. At a 2 s
+        # timeout the follower entered a 'lost' episode during every one of
+        # those gaps and published its halt goal at the robot's own pose --
+        # which cancelled the forward goal it had published a second earlier.
+        # The two fought and the robot never moved at all, while the status
+        # topic showed it happily tracking. The halt behaviour is right; the
+        # trigger was quicker than the detector.
+        self.declare_parameter('lost_after_s', 5.0)
         self.declare_parameter('republish_min_move_m', 0.15)
         self.declare_parameter('goal_rate_hz', 2.0)
         # 0.25, not the detector's permissive default. MEASURED on this
@@ -128,7 +136,22 @@ class Follower(Node):
         self.create_subscription(CompressedImage,
                                  '/camera/color/image_raw/compressed',
                                  self.on_rgb, SENSOR)
-        self.create_subscription(Image, '/camera/depth/image_raw',
+        # COMPRESSED depth, not raw. The raw topic is 848x480 16-bit, about
+        # 814 KB a frame at up to 30 Hz, and this node runs on the WORKSTATION,
+        # so subscribing to it pulls roughly 20 MB/s across the wifi link.
+        # Measured consequence: the robot's own DDS backed up and
+        # collision_monitor began rejecting its ONLY source with
+        #
+        #   [depth_cloud]: Latest source and current collision monitor node
+        #   timestamps differ on 6.67 seconds. Ignoring the source.
+        #
+        # 2554 times in one run, against ZERO in every run without this node.
+        # collision_monitor's documented response to losing its source is to
+        # stop the robot, so the follower tracked the target perfectly,
+        # published correct goals, and the wheels never turned. The node broke
+        # the robot by watching it.
+        self.create_subscription(CompressedImage,
+                                 '/camera/depth/image_raw/compressedDepth',
                                  self.on_depth, SENSOR)
         self.create_subscription(CameraInfo, '/camera/color/camera_info',
                                  self.on_info, SENSOR)
@@ -155,9 +178,12 @@ class Follower(Node):
             self.rgb = a[:, :, ::-1].copy()           # BGR -> RGB
 
     def on_depth(self, m):
-        if m.encoding != '16UC1':
+        """Decode compressedDepth: a 12-byte config header, then a 16-bit PNG."""
+        import cv2
+        a = cv2.imdecode(np.frombuffer(m.data[12:], np.uint8),
+                         cv2.IMREAD_UNCHANGED)
+        if a is None or a.dtype != np.uint16:
             return
-        a = np.frombuffer(m.data, dtype=np.uint16).reshape(m.height, m.width)
         with self.lock:
             self.depth = a.astype(np.float32) / 1000.0
 
