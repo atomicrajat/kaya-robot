@@ -125,20 +125,28 @@ controller_server:
     #  yaw_goal_tolerance: 0.25
     #  stateful: True
     general_goal_checker:
-      # stateful FALSE. With it true, the checker stops re-checking XY once
-      # position tolerance has been met and then only watches orientation --
-      # so the robot can latch inside 10 cm, keep manoeuvring to satisfy the
-      # goal heading, and finish somewhere else entirely while still reporting
-      # success.
+      # stateful TRUE, but only because the two things it depends on are now
+      # right. It latches the XY check once position tolerance is met and then
+      # watches heading, which is exactly what a robot arriving from a long
+      # traverse needs: reach the spot, then turn.
       #
-      # Measured: a 3.5 m goal passed through the target between samples, drove
-      # on, settled 0.60 m past it, and controller_server logged "Reached the
-      # goal!" from there. The same latch is what the circling near a goal was:
-      # position had stopped being checked, so nothing pulled it back.
+      # It was WRONG earlier in this config's life, and the measurements say
+      # why. With wz_max at 1.0 rad/s the robot satisfied heading by driving an
+      # arc and finished 0.60 m past the goal still reporting success. Turning
+      # it off then exposed the opposite failure: MPPI does not rotate in
+      # place -- it drives while turning -- so requiring position and heading
+      # at the same instant meant the robot reached 4.0 cm from a goal, began
+      # its ~97 deg heading correction, drifted out past 40 cm and hunted.
       #
-      # False makes the checker verify position AND orientation together at the
-      # moment it declares success, which is the only claim worth making.
-      stateful: False
+      # The base itself is not the problem. Commanded a pure in-place turn
+      # (wz only, vx = vy = 0) it closes a full 360 deg with 1.7 cm of net
+      # translation. It is the controller that will not spin on the spot.
+      #
+      # With wz_max halved to 0.5 and xy_goal_tolerance set from the measured
+      # 10.9 cm rotational excursion, latching finally does what it is for:
+      # three consecutive goals reached, no hunting, no tracking loss, final
+      # heading within 1 deg of the request.
+      stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       # The stock 0.25 m is most of this robot's own 0.32 m width -- it would
       # report "arrived" while standing a full body-width from the goal, and
@@ -149,7 +157,23 @@ controller_server:
       #
       # 0.10 m / 0.15 rad (8.6 deg) is comfortably inside what the pose
       # estimate supports while staying achievable for the controller.
-      xy_goal_tolerance: 0.10
+      # 0.15 m, set from the robot's MEASURED rotational behaviour rather than
+      # from ambition. Commanded a pure in-place turn (wz only, vx = vy = 0),
+      # this base closes a full 360 deg with 1.7 cm of net translation -- the
+      # omni kinematics are sound -- but it excursions up to 10.9 cm PART WAY
+      # through the turn before coming back.
+      #
+      # With stateful false, position and heading have to hold at the same
+      # instant. At 0.10 m the checker was asking the robot to stay inside a
+      # circle smaller than its own rotational wobble, so every heading
+      # correction at the goal broke the position check, and it drove on and
+      # hunted. Measured: reaching 8.0 cm and 2.4 cm from a goal repeatedly
+      # without ever being allowed to stop.
+      #
+      # 0.15 m clears the wobble with margin and is still well inside the
+      # robot's 0.32 m width. Tighten it only alongside a measurement showing
+      # the excursion has shrunk.
+      xy_goal_tolerance: 0.15
       # 0.25 rad (14 deg), nav2's own default, up from the 0.15 this started
       # with. 0.15 was set when every goal was a short hop in open space and
       # the robot arrived already pointing the right way. Arriving from a 3.5 m
