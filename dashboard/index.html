@@ -51,7 +51,9 @@
   button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
   .note { padding: 0 12px 12px; color: var(--dim); font-size: 12px; }
   .err { color: var(--warn); }
-  #manualbar { padding: 10px 12px; border-top: 1px solid var(--line);
+  #askimg { width: 100%; border-radius: 6px; border: 1px solid var(--line);
+           margin: 8px 0 6px; display: block; }
+#manualbar { padding: 10px 12px; border-top: 1px solid var(--line);
                display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
   .padgrid { display: grid; grid-template-columns: repeat(3, 46px);
              grid-auto-rows: 42px; gap: 6px; }
@@ -133,8 +135,13 @@
         <button type="submit">Go</button>
       </form>
       <div class="note" id="askout">
-        Phase 10. Needs the keyframe store (Phase 9) first — the button is wired
-        to the endpoint that will answer it.
+        Ask where something is. The robot answers from the places it remembers
+        driving past, and shows you the photo before it goes anywhere.
+      </div>
+      <div id="askhit" hidden>
+        <img id="askimg" alt="what the robot remembers of that place">
+        <div class="note" id="askwhy"></div>
+        <button id="askgo">Drive there</button>
       </div>
     </div>
 
@@ -753,14 +760,51 @@ function loadBot(cb) {
 })();
 
 // ----------------------------------------------------------------- ask (P10)
+let askAnswer = null;
+
 $('#askform').onsubmit = async e => {
   e.preventDefault();
   const q = $('#q').value.trim(); if (!q) return;
-  $('#askout').textContent = 'asking…';
-  const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ q }) });
-  const j = await r.json();
-  $('#askout').innerHTML = r.ok ? JSON.stringify(j) : '<span class="err">' + j.error + '</span>';
+  $('#askhit').hidden = true; askAnswer = null;
+  $('#askout').textContent = 'thinking…';
+  let j;
+  try {
+    const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q }) });
+    j = await r.json();
+  } catch (err) { $('#askout').innerHTML = '<span class="err">' + err + '</span>'; return; }
+
+  if (!j.ok) { $('#askout').innerHTML = '<span class="err">' + j.error + '</span>'; return; }
+  if (!j.found) {
+    // An honest miss, shown as a miss. The store covers one drive through one
+    // flat; plenty of fair questions have no answer in it yet.
+    $('#askout').innerHTML = 'No place I remember answers that. <span class="dim">' +
+      (j.why || '') + '</span>';
+    return;
+  }
+  askAnswer = j;
+  const conf = (j.confidence == null) ? '' :
+    ' · confidence ' + Number(j.confidence).toFixed(2);
+  $('#askout').innerHTML = '<b>' + (j.why || 'found it') + '</b>';
+  $('#askimg').src = '/api/keyframe.jpg?file=' + encodeURIComponent(j.file);
+  $('#askwhy').innerHTML =
+    '(' + j.x.toFixed(2) + ', ' + j.y.toFixed(2) + ') yaw ' +
+    j.yaw_deg.toFixed(0) + '°' + conf + '<br><span class="dim">' +
+    (j.caption || '').replace(/</g, '&lt;') + '</span>';
+  $('#askhit').hidden = false;
+};
+
+// Answering and driving stay separate on purpose: check the photo, then go.
+$('#askgo').onclick = async () => {
+  if (!askAnswer) return;
+  $('#askgo').disabled = true;
+  try {
+    const r = await fetch('/api/goal', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x: askAnswer.x, y: askAnswer.y, yaw: askAnswer.yaw }) });
+    const j = await r.json();
+    $('#askwhy').innerHTML = j.ok ? 'goal sent — watch the map'
+      : '<span class="err">' + j.error + '</span>';
+  } finally { $('#askgo').disabled = false; }
 };
 </script>
 </body>

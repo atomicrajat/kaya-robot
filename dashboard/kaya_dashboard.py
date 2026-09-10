@@ -41,6 +41,8 @@ import json
 import math
 import os
 import threading
+import sys
+import urllib.parse
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
@@ -57,6 +59,17 @@ from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPo
 from rclpy.time import Time
 from std_msgs.msg import Bool, String
 import tf2_ros
+
+# perception/ sits beside dashboard/ in the repo, not on the path.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                os.pardir, 'perception'))
+KEYFRAME_DIR = os.path.expanduser('~/work_projects/kaya_robot/keyframes')
+
+try:
+    import scene_memory
+except Exception as _e:                                   # noqa: BLE001
+    scene_memory = None
+    print('scene_memory unavailable (%s); /api/ask will report why' % _e)
 
 # The Isaac types live only on the robot -- neither isaac_ros_visual_slam_
 # interfaces nor nvblox_msgs is installed on the workstation. Rather than
@@ -469,6 +482,19 @@ def make_handler(node):
                     self._send(404, b'no costmap yet', 'text/plain')
                 else:
                     self._send(200, png, 'image/png')
+            elif self.path.startswith('/api/keyframe.jpg'):
+                q = urllib.parse.parse_qs(
+                    urllib.parse.urlparse(self.path).query)
+                name = (q.get('file') or [''])[0]
+                # basename only: this serves a directory to a browser, and
+                # '../../etc/passwd' is a file name too.
+                name = os.path.basename(name)
+                path = os.path.join(KEYFRAME_DIR, 'images', name)
+                if not name or not os.path.isfile(path):
+                    self._send(404, b'no such keyframe', 'text/plain')
+                    return
+                with open(path, 'rb') as f:
+                    self._send(200, f.read(), 'image/jpeg')
             else:
                 self._send(404, b'not found', 'text/plain')
 
@@ -528,15 +554,28 @@ def make_handler(node):
                 self._send(200, json.dumps({'ok': True, 'target': t}).encode(),
                            'application/json')
             elif self.path == '/api/ask':
-                # Phase 10 lands here: shortlist keyframes for the question,
-                # let a reasoning model pick one, send its pose as a goal.
-                # Deliberately not faked -- an endpoint that invents an answer
-                # is worse than one that says it is not built.
-                self._send(501, json.dumps({
-                    'error': 'Phase 10 not built yet. This endpoint is where '
-                             'the question will be answered: keyframes are '
-                             'Phase 9, the reasoning model is Phase 10.',
-                }).encode(), 'application/json')
+                if scene_memory is None:
+                    self._send(501, json.dumps({
+                        'error': 'perception/scene_memory.py could not be '
+                                 'imported, so questions cannot be answered.',
+                    }).encode(), 'application/json')
+                    return
+                q = (req.get('question') or '').strip()
+                if not q:
+                    self._send(400, json.dumps({'error': 'no question'}).encode(),
+                               'application/json')
+                    return
+                r = scene_memory.ask(q)
+                # ANSWERING AND DRIVING ARE SEPARATE. The question returns a
+                # place and the photo the robot remembers of it; the operator
+                # then presses Go. A model that is confidently wrong about a
+                # room should cost a glance at a picture, not a drive across
+                # the flat -- and this store already contains rooms captioned
+                # from a single doorway glimpse.
+                node.get_logger().info(
+                    'asked "%s" -> %s' % (q, r.get('why', r.get('error', ''))))
+                self._send(200 if r.get('ok') else 503,
+                           json.dumps(r).encode(), 'application/json')
             else:
                 self._send(404, b'not found', 'text/plain')
 
