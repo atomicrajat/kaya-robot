@@ -119,6 +119,10 @@ def generate_launch_description():
                               description='Nav2 parameter file. Override to nav2_static_map.yaml '
                                           'in this package to add the static_layer that map_2d '
                                           'feeds.'),
+        DeclareLaunchArgument('enable_color', default_value='true',
+                              description='Passed through to the camera. See the note there: '
+                                          'colour is the worst-behaved stream on this camera and '
+                                          'navigation does not need it.'),
         DeclareLaunchArgument('rviz', default_value='false'),
         DeclareLaunchArgument('foxglove', default_value='false',
                               description='Serve the stack to Foxglove Studio over the LAN, for '
@@ -136,6 +140,7 @@ def generate_launch_description():
             condition=IfCondition(EqualsSubstitution(LaunchConfiguration('slam'), 'cuvslam')),
             launch_arguments={
                 'depth_for_nvblox': 'true',
+                'enable_color': LaunchConfiguration('enable_color'),
                 'map_path': LaunchConfiguration('map_path'),
                 'hint_x': LaunchConfiguration('hint_x'),
                 'hint_y': LaunchConfiguration('hint_y'),

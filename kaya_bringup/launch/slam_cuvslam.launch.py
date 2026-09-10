@@ -117,6 +117,12 @@ def generate_launch_description():
                                           'stationary. Exposed only because in a dark room there '
                                           'may be no real features at all, which is worse. See '
                                           'the note at enable_laser below.'),
+        DeclareLaunchArgument('enable_color', default_value='true',
+                              description='Colour stream. Costs USB bandwidth and CPU '
+                                          'navigation does not need: measured 15 Hz, 133 ms '
+                                          'p90 gap, the worst stream on this camera. nvblox '
+                                          'needs it only for the mesh; the costmap comes from '
+                                          'depth. False gives the stereo pair more of the pipe.'),
         DeclareLaunchArgument('override_stamp', default_value='false',
                               description='Publish TF stamped with current time instead of the '
                                           'image time. Only needed if camera latency regresses '
@@ -198,7 +204,15 @@ def generate_launch_description():
                 'depth_width': '848',
                 'depth_height': '480',
                 'depth_fps': '30',
-                'enable_color': LaunchConfiguration('depth_for_nvblox'),
+                # Colour is separable from depth on purpose. It costs USB
+                # bandwidth and CPU that navigation does not need: measured at
+                # 15 Hz with a 133 ms p90 gap, the worst-behaved stream on the
+                # camera, while nvblox only needs it for the mesh and the
+                # costmap comes from the depth-derived ESDF slice. Turn it off
+                # to give cuVSLAM's stereo pair more of the pipe; turn it on
+                # for mapping runs, the dashboard view and anything that has to
+                # see in colour.
+                'enable_color': LaunchConfiguration('enable_color'),
                 'enable_depth': LaunchConfiguration('depth_for_nvblox'),
                 'depth_registration': LaunchConfiguration('depth_for_nvblox'),
                 # The depth POINT CLOUD exists for exactly one consumer:
