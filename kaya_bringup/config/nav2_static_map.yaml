@@ -1,3 +1,33 @@
+# TRANSFORM TOLERANCE IS SET TO THE CAMERA'S MEASURED LATENCY, NOT A GUESS.
+#
+# The Orbbec emits its IR pair about 0.42-0.47 s late whenever depth is enabled.
+# MEASURED on the left IR stream, which is cuVSLAM's only input:
+#
+#     depth pipeline OFF    IR stamp lag  0.019 s
+#     depth pipeline ON     IR stamp lag  0.459 s
+#
+# and the wheel transforms, published from the same board on the system clock,
+# read 0.006 s throughout -- so the board and the clock are fine, and this is
+# the camera.
+#
+# Every software knob was tried and none of it moved: time_domain 'system'
+# instead of 'global' (0.420 s), enable_sync_host_time true (0.463 s),
+# depth_registration false (0.468 s), enable_frame_sync false (0.470 s),
+# enable_point_cloud false (0.425 s). The depth engine is on-device and the IR
+# frames come out behind it.
+#
+# cuVSLAM inherits that lag into map -> odom and odom -> base_footprint, so
+# Nav2 asking for a transform at 'now' finds the newest data half a second old.
+# At transform_tolerance 0.8 that mostly worked and intermittently did not, and
+# when it did not the goal checker could not compute a distance and fell
+# through to "Reached the goal!" -- the robot stopping 23 cm into a 5 m drive
+# and reporting success.
+#
+# 1.5 s covers the measured 0.47 s with room for the spikes under motion. At
+# the 0.15 m/s this robot drives, 1.5 s is 22 cm, which is inside the
+# inflation radius, so the safety layers still have margin. This is setting the
+# tolerance to the hardware's real behaviour, not widening it to hide a fault.
+
 # nav2.yaml + a static_layer, for navigating on the SAVED 2D GRID instead of a
 # reloaded nvblox volume.
 #
@@ -319,7 +349,7 @@ controller_server:
       # of position uncertainty -- so it is a ceiling to lower, not a default to
       # keep. The real fix is upstream: if the camera's stamps get tighter, bring
       # this back down. (time_domain=global was far worse: 0.897 s MEDIAN.)
-      transform_tolerance: 0.8
+      transform_tolerance: 1.5
       temperature: 0.3
       gamma: 0.015
       # *** THE most important line in this file for THIS robot. ***
@@ -432,7 +462,7 @@ local_costmap:
       # the goal!" without moving. See the note at the controller above for the
       # measured camera-stamp lag this has to absorb (0.048 s median, 0.78 s
       # tail).
-      transform_tolerance: 0.8
+      transform_tolerance: 1.5
       rolling_window: true
       width: 3
       height: 3
@@ -565,7 +595,7 @@ global_costmap:
       # the goal!" without moving. See the note at the controller above for the
       # measured camera-stamp lag this has to absorb (0.048 s median, 0.78 s
       # tail).
-      transform_tolerance: 0.8
+      transform_tolerance: 1.5
       # MEASURED: footprint_radius in kaya.urdf.xacro. The real deck is a
       # truncated triangle; a circle enclosing it (0.143 chassis radius +
       # half the 25 mm wheel width + margin) is the correct conservative
@@ -728,7 +758,7 @@ behavior_server:
     global_frame: map
     robot_base_frame: base_footprint
     # See the note at the controller's transform_tolerance above.
-    transform_tolerance: 0.8
+    transform_tolerance: 1.5
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
@@ -808,7 +838,7 @@ collision_monitor:
     cmd_vel_out_topic: "cmd_vel"
     state_topic: "collision_monitor_state"
     # See the note at the controller's transform_tolerance above.
-    transform_tolerance: 0.8
+    transform_tolerance: 1.5
     # MEASURED. The depth cloud's stamp lag under the full stack is 0.508 s
     # median / 0.535 s p90 / 0.935 s max -- and the stock 1.0 s timeout sits
     # right on top of that max, so the source was rejected intermittently:
@@ -917,7 +947,7 @@ docking_server:
       costmap_topic: "local_costmap/costmap_raw"
       footprint_topic: "local_costmap/published_footprint"
       # See the note at the controller's transform_tolerance above.
-      transform_tolerance: 0.8
+      transform_tolerance: 1.5
       projection_time: 5.0
       simulation_step: 0.1
       dock_collision_threshold: 0.3

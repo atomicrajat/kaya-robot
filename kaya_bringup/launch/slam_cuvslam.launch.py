@@ -68,6 +68,12 @@ def generate_launch_description():
         DeclareLaunchArgument('publish_odom_tf', default_value='true',
                               description='Let cuVSLAM own odom -> base_link. See the TF '
                                           'ownership note below before changing.'),
+        DeclareLaunchArgument('point_cloud', default_value='true',
+                              description='Publish /camera/depth/points. It is '
+                                          'collision_monitor and the local '
+                                          'costmap voxel_layer source, so false '
+                                          'leaves the robot without live '
+                                          'obstacle data -- diagnostic use.'),
         DeclareLaunchArgument('time_domain', default_value='global',
                               description='Camera timestamp domain: global | system | device. '
                                           'global is REQUIRED for VIO accuracy -- read the note '
@@ -217,6 +223,38 @@ def generate_launch_description():
                 # not this. Trading frame rate for brightness is what broke it.
                 'enable_ir_long_exposure': 'false',
                 'ir_ae_max_exposure': '20000',
+                # SYNC THE CAMERA CLOCK TO THE HOST.
+                # time_domain is 'global', the camera's own hardware clock, and
+                # it has to stay that way -- see the note above, where 'system'
+                # was measured corrupting IMU intervals by up to 11.4 ms. But
+                # the driver ships with enable_sync_host_time FALSE, so that
+                # hardware clock free-runs against the host's, and MEASURED it
+                # sits about 0.5 s behind:
+                #
+                #   map -> odom              24.8 Hz   stamp lag 0.545 s
+                #   odom -> base_footprint   24.7 Hz   stamp lag 0.547 s
+                #   base_link -> wheel_1     15.0 Hz   stamp lag 0.005 s
+                #
+                # The wheel transforms come off the same board on the system
+                # clock and are current; only the camera-derived ones are half
+                # a second in the past. That is a CLOCK OFFSET, not latency,
+                # and cuVSLAM inherits it into every transform it publishes.
+                #
+                # It is what makes Nav2 fail to transform map -> odom, and a
+                # goal checker that cannot compute a distance falls through to
+                # "Reached the goal!" -- the robot stopping 23 cm into a 5 m
+                # drive and reporting success, reproducibly.
+                #
+                # Syncing to host time keeps the hardware timebase (so image
+                # and IMU stay consistent, which is the whole reason for
+                # 'global') while removing the offset against the host.
+                'enable_sync_host_time': 'true',
+                # DO NOT MAKE THE IR PAIR WAIT FOR DEPTH.
+                # enable_frame_sync aligns every enabled stream to a common
+                # frame, which means the driver holds the fast ones until the
+                # slow one is ready. Depth is the slow one, so the IR pair --
+                # the only input cuVSLAM uses -- was being buffered behind it.
+                'enable_frame_sync': 'false',
                 'enable_left_ir': 'true',
                 'left_ir_width': '848',
                 'left_ir_height': '480',
@@ -303,7 +341,26 @@ def generate_launch_description():
                 # see in colour.
                 'enable_color': LaunchConfiguration('enable_color'),
                 'enable_depth': LaunchConfiguration('depth_for_nvblox'),
-                'depth_registration': LaunchConfiguration('depth_for_nvblox'),
+                # REGISTRATION FOLLOWS COLOUR, NOT DEPTH.
+                # depth_registration reprojects the depth image into the COLOUR
+                # camera's frame, so it is meaningless with colour disabled --
+                # and it was wired to depth_for_nvblox, which is hard-coded true
+                # in nav.launch.py. So every depth frame was being reprojected
+                # to match a stream that was not running.
+                #
+                # It is not free, and what it costs is LATENCY ON THE IR PAIR.
+                # Measured on the left IR stream, the input cuVSLAM runs on:
+                #
+                #   depth pipeline ON    IR stamp lag  0.459 s
+                #   depth pipeline OFF   IR stamp lag  0.019 s
+                #
+                # 440 ms, on a stream that had nothing to do with depth. That
+                # lag is inherited by every transform cuVSLAM publishes, and it
+                # is why Nav2 could not convert map -> odom, why the goal
+                # checker fell through to "Reached the goal!" 23 cm into a 5 m
+                # drive, and why collision_monitor kept declaring its source
+                # invalid and stopping the robot.
+                'depth_registration': LaunchConfiguration('enable_color'),
                 # The depth POINT CLOUD exists for exactly one consumer:
                 # collision_monitor's safety layer (config/nav2.yaml). cuVSLAM
                 # uses the IR pair and nvblox uses the depth IMAGE, so nothing
@@ -322,7 +379,7 @@ def generate_launch_description():
                 # The alternative was raising source_timeout again, but a
                 # safety layer reasoning about 1.8 s-old data is decorative --
                 # better to make the data fresh than to widen the window.
-                'enable_point_cloud': LaunchConfiguration('depth_for_nvblox'),
+                'enable_point_cloud': LaunchConfiguration('point_cloud'),
                 'point_cloud_decimation_filter_factor': '4',
                 'enable_accel': 'true',
                 'enable_gyro': 'true',
