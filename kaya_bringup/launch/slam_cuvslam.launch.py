@@ -156,8 +156,75 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(
                 os.path.join(orbbec_share, 'launch', 'gemini_330_series.launch.py')),
             launch_arguments={
+                # PIN THE IR PAIR. These are the only streams cuVSLAM runs
+                # on, and they were the one pair left unconfigured: depth got
+                # an explicit 848x480 at 30, colour was deliberately pinned
+                # because the driver otherwise picked a 60 fps profile, and the
+                # IR pair was left to whatever default the driver chose.
+                #
+                # MEASURED, unpinned, on the robot at idle:
+                #
+                #   /camera/left_ir/image_raw    20.1 Hz   gap median 51.2 ms
+                #   /camera/right_ir/image_raw   20.2 Hz   gap median 51.4 ms
+                #
+                # cuVSLAM expects 30 Hz and warns above a 34 ms gap, so at
+                # 51 ms EVERY frame is late and the log fills with "Delta
+                # between current and previous frame is above threshold".
+                # That was read as a camera stall under load for most of a
+                # session. It is not load: the link is USB 3.2 at 5000 Mbps
+                # carrying about 24 MB/s, and the board has bandwidth to spare.
+                # The camera was simply never asked for 30.
+                #
+                # It matters well past the warnings. Late IR frames make
+                # cuVSLAM's pose output late, which makes TF late, and
+                # collision_monitor then cannot transform its depth cloud into
+                # the base frame:
+                #
+                #   Lookup would require extrapolation into the future.
+                #   Requested ...494.668 but latest data is ...494.472
+                #   Robot to stop due to invalid source
+                #
+                # A safety layer doing exactly its job on a pipeline that is
+                # 0.2 s behind, which aborted two goals partway across the flat.
+                # A SENSOR CANNOT EXPOSE FOR LONGER THAN ITS FRAME PERIOD.
+                # At 30 fps that period is 33.3 ms. The driver shipped with
+                # `enable_ir_long_exposure` TRUE and `ir_ae_max_exposure` at
+                # -1, meaning auto-exposure had no upper bound -- so in
+                # ordinary indoor light it settled around 50 ms and the sensor
+                # simply could not produce 30 fps. Measured, before and after,
+                # nothing else changed:
+                #
+                #                     before          after
+                #   left_ir           18.0 Hz         28.4 Hz
+                #   right_ir          20.9 Hz         30.8 Hz
+                #   cuVSLAM warnings  ~1278 / 40 s    228 / 40 s
+                #
+                # The 51 ms median gap between IR frames WAS the exposure time.
+                # This was read as a camera stall under CPU load for most of a
+                # session, and it is not load: the link is USB 3.2 at 5000 Mbps
+                # carrying ~24 MB/s, memory was 4.1 GB free, and pinning the IR
+                # rate to 30 changed nothing because the rate was never the
+                # constraint -- the exposure was.
+                #
+                # It also explains why the PAIR desynchronised, left running
+                # 3 Hz slower than right: two sensors metering slightly
+                # different scenes choose slightly different exposures, and a
+                # stereo pair that drifts apart is exactly what cuVSLAM cannot
+                # use. The cap makes both deterministic.
+                #
+                # 20 ms leaves headroom under the 33.3 ms period for readout.
+                # If tracking degrades in a genuinely dark room, raise gain --
+                # not this. Trading frame rate for brightness is what broke it.
+                'enable_ir_long_exposure': 'false',
+                'ir_ae_max_exposure': '20000',
                 'enable_left_ir': 'true',
+                'left_ir_width': '848',
+                'left_ir_height': '480',
+                'left_ir_fps': '30',
                 'enable_right_ir': 'true',
+                'right_ir_width': '848',
+                'right_ir_height': '480',
+                'right_ir_fps': '30',
                 # See the module docstring -- non-negotiable for stereo VSLAM.
                 # OFF by default, and the docstring above explains why. Made
                 # switchable to answer one question empirically: this robot's

@@ -95,6 +95,30 @@ def generate_launch_description():
                                           'the robot. Leave false to navigate, which uses '
                                           'dynamic mapping so people are not fused in as walls. '
                                           'See config/nvblox_mapping.yaml.'),
+        # nvblox is NOT always needed, and running it when it is not is
+        # expensive. It costs ~22% of CPU and ~14% of memory on this board,
+        # doing TSDF integration, ESDF computation and mesh generation on both
+        # CPU and GPU, and competing with cuVSLAM for the camera.
+        #
+        # Whether anything consumes that depends entirely on the costmap
+        # config. nav2.yaml uses `nvblox_layer` in both costmaps, so nvblox IS
+        # the obstacle source and must run. nav2_static_map.yaml uses
+        # static_layer plus a voxel_layer fed straight from the depth cloud,
+        # and reads nvblox NOWHERE -- so with that config nvblox is pure load,
+        # feeding nobody.
+        #
+        # Turning it off also loses the dashboard's 3D mesh view, which is the
+        # other thing that reads it. That is the trade: a live 3D
+        # reconstruction, or headroom for the control loop.
+        DeclareLaunchArgument('nvblox', default_value='true',
+                              description='Set false to skip nvblox entirely. '
+                                          'Correct with nav2_static_map.yaml, '
+                                          'whose costmaps do not read nvblox; '
+                                          'NOT correct with nav2.yaml, where '
+                                          'nvblox_layer is the only obstacle '
+                                          'source and the robot would drive '
+                                          'blind to anything not on the '
+                                          'static map.'),
         DeclareLaunchArgument('nvblox_map', default_value='',
                               description='A saved .nvblx volume to reload, so the costmap holds '
                                           'the whole space instead of only what the camera has '
@@ -170,6 +194,7 @@ def generate_launch_description():
         Node(
             package='nvblox_ros', executable='nvblox_node', name='nvblox_node',
             output='screen',
+            condition=IfCondition(LaunchConfiguration('nvblox')),
             parameters=[nvblox_cfg],
             # The camera_0/ prefix is NOT decoration: nvblox namespaces its
             # inputs per camera, and num_cameras is 1 here, so camera index 0
