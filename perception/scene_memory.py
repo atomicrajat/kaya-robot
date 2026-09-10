@@ -32,6 +32,19 @@ TWO MODELS, ONE DOWNLOAD
 Captioning needs vision. Answering needs only language, and the vision model
 answers language fine, so both use qwen2.5vl and there is one thing to install.
 
+THE POSES ARE ONLY AS GOOD AS THE FRAME THEY WERE RECORDED IN
+This store was recorded with no map_path, because relocalisation failed three
+times from the mark -- furniture has moved since the map was built. cuVSLAM
+therefore built a fresh frame anchored wherever the robot stood at launch, and
+the store is reusable only because that was the MARK: the first keyframe reads
+(-0.008, 0.002) yaw 0.0, which is the origin anchor firing on the marked spot.
+
+So before driving to any pose from this store: put the robot on the mark,
+facing the same way, and launch with no map_path. Launch from anywhere else and
+every stored pose is offset by that distance -- and the failure is silent, the
+robot driving confidently to the wrong room with a photo of the right one on
+the screen. See keyframes/FRAME.md.
+
 WHERE THIS RUNS, and why that is not a contradiction
 On the workstation, not the robot -- against the roadmap's instinct to put
 models on-board. Because this query is ONE-SHOT: the human waits a second for
