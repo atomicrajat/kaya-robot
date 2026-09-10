@@ -118,6 +118,12 @@ def generate_launch_description():
                                           'stationary. Exposed only because in a dark room there '
                                           'may be no real features at all, which is worse. See '
                                           'the note at enable_laser below.'),
+        DeclareLaunchArgument('color_fps', default_value='5',
+                              description='Colour frame rate. 5, not 30: at 30 the colour stream '
+                                          'starved cuVSLAM\'s left eye (24.5 Hz / 66.6 ms p90 '
+                                          'against the right\'s 28.8 Hz / 35.0 ms), and cuVSLAM '
+                                          'needs matched pairs. Nothing consuming colour needs '
+                                          '30 Hz.'),
         DeclareLaunchArgument('enable_color', default_value='true',
                               description='Colour stream. Costs USB bandwidth and CPU '
                                           'navigation does not need: measured 15 Hz, 133 ms '
@@ -201,7 +207,22 @@ def generate_launch_description():
                 # the frames nvblox consumes, for nothing.
                 'color_width': '848',
                 'color_height': '480',
-                'color_fps': '30',
+                # 5 fps, not 30, and this is the fix for a MEASURED fault
+                # rather than a saving. At 30 fps the colour stream starved
+                # cuVSLAM's LEFT eye: measured with the full nav stack, left IR
+                # ran 24.5 Hz at a 66.6 ms p90 gap against the right's 28.8 Hz
+                # and 35.0 ms. cuVSLAM needs matched PAIRS, so the slow eye set
+                # the true tracking rate, and stereo_sync.py showed 0% unmatched
+                # throughout -- correctly, because every surviving left frame
+                # does have a right. Only comparing the two RATES exposes it.
+                #
+                # Turning colour off entirely balanced the pair and took a
+                # 3.5 m traverse from ~20 cm to 6.3 cm, but that is not a fix:
+                # the dashboard view, open-vocabulary detection and any
+                # reasoning model all need RGB. Nothing needs it at 30 Hz --
+                # the dashboard polls ~6 Hz, and the roadmap's own rule for
+                # detection is 1-2 Hz because "a room does not change fast".
+                'color_fps': LaunchConfiguration('color_fps'),
                 'depth_width': '848',
                 'depth_height': '480',
                 'depth_fps': '30',

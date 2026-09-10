@@ -119,6 +119,9 @@ def generate_launch_description():
                               description='Nav2 parameter file. Override to nav2_static_map.yaml '
                                           'in this package to add the static_layer that map_2d '
                                           'feeds.'),
+        DeclareLaunchArgument('color_fps', default_value='5',
+                              description='Colour frame rate, passed to the camera. See the note '
+                                          'there: 30 fps starved the stereo pair.'),
         DeclareLaunchArgument('enable_color', default_value='true',
                               description='Passed through to the camera. See the note there: '
                                           'colour is the worst-behaved stream on this camera and '
@@ -141,6 +144,7 @@ def generate_launch_description():
             launch_arguments={
                 'depth_for_nvblox': 'true',
                 'enable_color': LaunchConfiguration('enable_color'),
+                'color_fps': LaunchConfiguration('color_fps'),
                 'map_path': LaunchConfiguration('map_path'),
                 'hint_x': LaunchConfiguration('hint_x'),
                 'hint_y': LaunchConfiguration('hint_y'),
