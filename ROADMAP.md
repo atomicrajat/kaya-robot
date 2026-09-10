@@ -362,6 +362,37 @@ Two things are known broken and are NOT worked around:
 - **`map_server` loses a lifecycle race** on this board often enough to matter.
   `map_server_guard` nudges it to active; the underlying race is unfixed.
 
+### The colour stream was starving cuVSLAM's left eye
+
+Measured on the robot, camera stream rates with the full nav stack running:
+
+| stream | colour ON | colour OFF |
+|---|---|---|
+| left IR | 24.5 Hz, p90 **66.6 ms** | **28.0 Hz, p90 35.5 ms** |
+| right IR | 28.8 Hz, p90 35.0 ms | 29.1 Hz, p90 34.9 ms |
+| depth points | 29.2 Hz, p90 36.4 ms | 29.6 Hz, p90 34.0 ms |
+
+The two eyes were not equal. The left ran 15% slower with 10% of its frames
+arriving at half rate, and cuVSLAM needs matched PAIRS, so the slow eye set the
+true tracking rate. `stereo_sync.py` reported 0% unmatched throughout, which is
+consistent and not a contradiction: every surviving left frame does have a
+right. The drops are on the left camera, not in the pairing, and only a rate
+comparison shows it.
+
+Turning colour off with `enable_color:=false` balances the pair, and the
+3.5 m traverse went from ~20 cm to **6.3 cm**, matching the short-hop accuracy
+for the first time, with zero tracking losses and zero pose-guard trips.
+
+Two things this did NOT fix, so they are still open:
+
+- **~400 ms stalls.** Under load every camera stream freezes together for up to
+  400 ms. At 0.5 rad/s that is 11.5 deg of rotation with no vision, dead
+  reckoned on the IMU, and it is what produces the z excursion during turns
+  (0.14-0.22 m loaded against 0.013-0.026 m unloaded, which reproduces).
+  `jetson_clocks` did not help, so it is not frequency scaling.
+- **`nvpmodel -m 2`** (MAXN_SUPER) is available and the board is running on
+  25W. The call errored with "bad input" and was not retried.
+
 ### What is left, in the order that matters
 
 1. **VIO stability is now the limiting factor, not planning.** On one traverse
