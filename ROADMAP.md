@@ -219,6 +219,50 @@ several hundred places; at 62 it is not needed.
 robot capability — only the keyframes from Phase 9 and the navigation that
 already works.
 
+### The camera stall is now the largest source of navigation error
+
+Not a background curiosity any more. Measured across two runs on 2026-09-10,
+both driving to a pose chosen by Phase 10:
+
+    run 1 (no static map)   0.00 m in flight  ->  22.6 cm settled
+    run 2 (static map)      0.03 m in flight  ->  33.0 cm settled
+
+Both ARRIVED clean and then the pose shifted during the final
+rotate-to-goal-heading. Run 2 logged 1149 'Delta between current and previous
+frame is above threshold' warnings in about four minutes. In-place rotation was
+measured at 1.7 cm net over 360 deg, so a 33 cm shift from a small final turn
+is not something this base can do -- the estimate is moving, not the robot.
+
+The same stall broke tracking outright at the end of the session before it:
+cuVSLAM lost visual tracking on a PARKED robot, dead reckoning ran the pose to
+(+63, -41, z -61), and pose_guard correctly cancelled on z = -3.98 m and roll
++66.7 deg. The guard works; the input to it does not.
+
+Still unexplained: jetson_clocks made no difference, and MAXN_SUPER has never
+been successfully enabled (`nvpmodel -m 2` errors with 'bad input').
+
+Worth separating before chasing it: whether the settled pose is wrong or the
+robot physically overshoots. Those need different fixes and the logs cannot
+tell them apart -- it needs someone looking at the robot.
+
+### Static map or not is a real choice, and it was made by accident once
+
+`nav.launch.py` defaults to `nav2.yaml` (nvblox_layer, no static map). The
+smooth runs all used `nav2_static_map.yaml` with `map_2d` and `nvblox_map`
+loaded. Launching with defaults gives the planner nothing at t=0, and it
+wandered for 66 s near the origin before finding a path. Not a regression in
+the planner -- a different launch.
+
+    kaya_run.sh start \
+      nav2_params:=.../config/nav2_static_map.yaml \
+      map_2d:=/home/orin-nano/kaya_maps/home_final/home_2d.yaml \
+      nvblox_map:=/home/orin-nano/kaya_maps/home_final/home.nvblx \
+      enable_color:=true color_fps:=5
+
+The 62 keyframe poses were checked against `home_final` before trusting the two
+frames together: 100% land in free space as recorded, against 59-85% for every
+1-2 m shift, so the session frame and the saved map genuinely coincide.
+
 ### Phase 11 — Objects: find, track, and follow
 
 Two related capabilities, sharing a detection stack:
