@@ -34,6 +34,14 @@ cancel service, and latches the verdict on ~/pose_ok. It does NOT publish to
 controller would win half of it. Cancelling removes the thing generating the
 commands.
 
+IT WAITS FOR THE MAP FRAME TO BE ANCHORED FIRST
+Before origin_anchor_node localises, map -> base_footprint is whatever cuVSLAM
+integrated while it was starting up, and that is legitimately not flat: the
+anchor node's own notes record it reading (0.285, -0.061, -0.360) m with -9.0
+deg of pitch at exactly that moment. Checked from launch, this guard trips on
+that every time and cancels navigation before the robot has done anything. So
+it stays quiet until ~/anchored says the frame means something.
+
 It does not try to recover. A diverged tracker needs relocalisation, and
 guessing where the robot is in order to keep going is the exact mistake this
 node exists to prevent.
@@ -67,6 +75,8 @@ class PoseGuard(Node):
         # One bad sample is jitter; several in a row is a diverged tracker.
         self.declare_parameter('strikes', 3)
         self.declare_parameter('enabled', True)
+        self.declare_parameter('anchored_topic',
+                               '/cuvslam_origin_anchor/anchored')
 
         self.map_frame = self.get_parameter('map_frame').value
         self.base_frame = self.get_parameter('base_frame').value
@@ -75,6 +85,9 @@ class PoseGuard(Node):
         self.prev = None
         self.strikes = 0
         self.tripped = False
+        # Nothing is checked until the map frame has been anchored; before
+        # that the pose is startup noise and not a fault.
+        self.armed = False
 
         latched = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -83,16 +96,33 @@ class PoseGuard(Node):
         self.cancel_cli = self.create_client(
             CancelGoal, '/navigate_to_pose/_action/cancel_goal')
 
+        self.create_subscription(
+            Bool, self.get_parameter('anchored_topic').value, self.on_anchored,
+            QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1,
+                       durability=DurabilityPolicy.TRANSIENT_LOCAL))
+
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.create_timer(1.0 / self.get_parameter('rate_hz').value, self.tick)
         self.ok_pub.publish(Bool(data=True))
         self.get_logger().info(
-            'watching %s -> %s: |z| <= %.2f m, tilt <= %.1f deg, speed <= %.2f m/s'
+            'waiting for the map frame to be anchored, then watching '
+            '%s -> %s: |z| <= %.2f m, tilt <= %.1f deg, speed <= %.2f m/s'
             % (self.map_frame, self.base_frame,
                self.get_parameter('max_z_m').value,
                self.get_parameter('max_tilt_deg').value,
                self.get_parameter('max_speed_m_s').value))
+
+    def on_anchored(self, msg):
+        if not msg.data:
+            self.get_logger().warn(
+                'map frame reported NOT anchored; staying disarmed, since a '
+                'pose that was never trustworthy is not this node to judge')
+            return
+        if not self.armed:
+            self.armed = True
+            self.prev = None
+            self.get_logger().info('map frame anchored; now watching the pose')
 
     @staticmethod
     def _roll_pitch(q):
@@ -102,7 +132,9 @@ class PoseGuard(Node):
         return roll, math.asin(sinp)
 
     def tick(self):
-        if self.tripped or not self.get_parameter('enabled').value:
+        if self.tripped or not self.armed:
+            return
+        if not self.get_parameter('enabled').value:
             return
         try:
             tf = self.tf_buffer.lookup_transform(
