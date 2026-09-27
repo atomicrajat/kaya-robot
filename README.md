@@ -12,6 +12,10 @@ workstation on 2026-09-08.
 | `kaya_description` | URDF/xacro. Publishes `base_link -> camera_link`; the Orbbec driver supplies the rest of the camera chain. |
 | `kaya_bringup` | Launch composition. |
 
+**Simulation:** Kaya as an Isaac Sim robot, calibrated against this one -
+`kaya_description/usd/README.md`. The measurements behind the URDF and the
+sim are in `kaya_description/cad/kaya_dimensions.yaml`.
+
 ## Phase 1 (complete)
 
     ros2 launch kaya_bringup imu.launch.py

@@ -1,0 +1,619 @@
+# =============================================================================
+#  kaya_dimensions.yaml - THE single source of truth for Kaya's geometry.
+#
+#  Lives in the repo at kaya_description/cad/ since 2026-09-27.
+#  Everything downstream is generated from this file: the Fusion 360 model, the
+#  ROS URDF, and the Isaac Sim USD. Never edit a dimension in Fusion or in the
+#  URDF directly - edit it here and regenerate, or the three will silently drift
+#  apart and you will debug a sim-to-real gap that is actually a typo.
+#
+#  UNITS: mm, grams, degrees.  (ROS wants m/kg/rad; the generator converts.)
+#  Leave a value as `null` if you have not measured it yet. null is honest;
+#  a guessed number that looks measured is the thing that costs you months.
+#
+#  PROVENANCE: every value that did NOT come off the real robot carries a
+#  sibling `*_source` key. See the `sources:` block at the bottom for what each
+#  tag means. A value with no `_source` tag was measured by Rajat on hardware.
+# =============================================================================
+
+meta:
+  robot: kaya
+  measured_by: rajat
+  date: 2026-08-28
+  revision: 2
+  notes: |
+    r1: Measurements from Rajat + 15 photos, 2026-08-28. Two CORRECTIONS to
+    earlier assumptions came out of this: the servos are Waveshare ST3020 (not
+    Feetech ST3215 as SETUP_LOG.md records), and the camera pitches UP ~5 deg
+    (an earlier sign error had it as down).
+    Layout confirmed from photos: TWO wheels forward flanking the camera, ONE
+    at the rear -> wheel angles are 60/180/300 deg, not 0/120/240.
+
+    r2: Vendor CAD sourced for the two standard components and imported into
+    Fusion. Body envelopes below now come from real manufacturer STEP files
+    rather than being null - tagged `waveshare_step` / `orbbec_step`. These are
+    NOT Rajat's measurements and must not be treated as such; if a vendor figure
+    ever disagrees with a hardware measurement, the hardware measurement wins.
+    The omni wheel could NOT be positively identified against any catalogue
+    part, so its roller geometry stays photo-derived and visual-only.
+
+# -----------------------------------------------------------------------------
+# CONVENTIONS - read before measuring. These fix what every number below means.
+# -----------------------------------------------------------------------------
+conventions:
+  # REP-103 body frame:  +X forward,  +Y left,  +Z up.  Right-handed.
+  #
+  # ORIGIN (base_link): on the chassis' axis of rotation, at WHEEL AXLE HEIGHT.
+  #   - The axis of rotation is the point the robot spins about when all three
+  #     wheels drive equally. For a symmetric 3-wheel layout that is the
+  #     centroid of the three contact patches.
+  #   - base_footprint is the same point projected to the floor (z = 0), so
+  #     base_link sits exactly wheel_rolling_radius above it.
+  #
+  # FORWARD (+X) is DEFINED BY THE CAMERA: +X points where the camera looks,
+  #   projected onto the floor plane. Every wheel angle below is measured from
+  #   this axis, counter-clockwise seen from above.
+  #
+  # This matters more than it looks: the Phase 2 kinematics matrix is built
+  # directly from these angles, and getting the sign or the zero wrong makes the
+  # robot drive at an angle to every command you give it.
+  forward_axis_defined_by: camera
+  angle_reference: "+X (camera forward), counter-clockwise viewed from above"
+
+  # The Fusion model places its GLOBAL ORIGIN at base_link, not at the floor.
+  # base_footprint is a construction plane at -wheel_rolling_radius. This means
+  # every component's local coordinates ARE its URDF transform, with no offset
+  # applied at export time.
+  cad_origin: base_link
+  cad_orientation: z_up
+
+# -----------------------------------------------------------------------------
+# WHEELS - the numbers odometry is built on. Measure these most carefully.
+# -----------------------------------------------------------------------------
+wheels:
+  # ROLLING diameter, not the plastic hub diameter, and measured UNDER LOAD.
+  # Best method: mark one wheel, put the robot's real weight on it, roll it in a
+  # straight line for 10 full revolutions, measure the total distance travelled.
+  #   rolling_diameter = total_distance / (10 * pi)
+  # Rollers compress under load; that compressed value is what odometry needs.
+  rolling_diameter_mm: 74.0
+  rolling_diameter_method: >
+    Phase 2, 2026-09-03: drove 10 s at a commanded 0.1 m/s (odometry-reported
+    0.9094 m) and compared to a tape measure of the actual distance -- came
+    back "about the same" (qualitative, not an exact reading). No correction
+    applied. This is a coarser test than the loaded 10-revolution roll this
+    field originally asked for; redo with an exact tape reading if the
+    curriculum's Sec. 02 measured-2m drive test later shows linear drift.
+
+  width_mm: 25.0                     # MEASURED, both rows together
+  roller_rows: 2                     # staggered double row, from photos
+
+  # --- COSMETIC ONLY. None of the block below touches kinematics, odometry or
+  # --- collision. The simulated wheel is a single cylinder with anisotropic
+  # --- friction (see CAD_CONTEXT §5); this is purely so the visual mesh looks
+  # --- like the real wheel. Wrong values here cost nothing but appearance.
+  hub_diameter_mm: null              # aluminium plate OD, for CAD appearance only
+  hub_diameter_mm_source: null
+
+  roller_count_per_row: 6
+  roller_count_per_row_source: photo_count
+  # Cross-check that makes 6 credible rather than a guess off a photo:
+  # rollers on an omni wheel lie CIRCUMFERENTIALLY, so their DIAMETER is capped
+  # by the row width (25/2 = 12.5 mm) while their LENGTH is set by arc spacing.
+  # At a roller centre radius of (37 - 6) = 31 mm and 6 per row, each barrel is
+  #   2 * 31 * sin(180/6) = 31 mm long
+  # i.e. long slender barrels - which is what photo 4 shows. A count of 12 or 16
+  # per row would give stubby rollers that do not match the photo at all.
+  roller_diameter_mm: 12.0
+  roller_diameter_mm_source: derived_from_row_width
+
+  # Proper barrel profile for the CAD: revolve, about the roller axis, an arc of
+  # radius = rolling_diameter/2 centred on the wheel axis. That puts the roller
+  # surface exactly on the rolling circle instead of approximating it.
+  roller_profile: arc_of_rolling_radius
+
+  # NOT identified against any catalogue part. Searched Nexus (58/82/100/127/152
+  # - no 74), REV (75 mm is mecanum, not omni), and the usual suppliers. If you
+  # can name the vendor or read a marking off the aluminium hub, a real STEP
+  # would replace the whole cosmetic block above.
+  vendor: null
+  step_file_source: null
+
+  # Distance from base_link's Z axis to each wheel's FLOOR CONTACT PATCH.
+  # Measure all three. If they differ by >2 mm, say so - unequal radii break
+  # the symmetric kinematics and need per-wheel handling.
+  # RESOLVED (photos): 150 mm was the centre of the OUTER roller row; 153 mm
+  # the outermost face. The wheel assembly is 25 mm wide and its axle is
+  # RADIAL, so the assembly spans roughly 130.5-155.5 mm radially and its
+  # mid-plane - the effective contact plane for a staggered double row - is
+  # ~143 mm as a geometric/photo estimate.
+  #
+  # REFINED 2026-09-03 (Phase 2 spin calibration, curriculum Sec. 02): 143 mm
+  # is a geometric estimate, not quite the same thing as L in the omni
+  # kinematics (v_i = L*w) -- L is whatever value makes odometry's yaw rate
+  # match the chassis' TRUE physical yaw rate, which also folds in small
+  # wheel-compression/slip effects the photo measurement can't see. Spun the
+  # robot at a constant 0.5 rad/s for ~126 s: odometry (using L=143mm)
+  # integrated 9.9746 turns; visually counted ~10.333 true turns (10 full
+  # turns plus the front landing ~1/3 turn past start, i.e. clock position
+  # 12->8, eyeballed not precision-measured). Correction:
+  #   L_true = L_assumed * (odom_turns / true_turns) = 143 * (9.9746/10.3333)
+  #          = 138.0 mm
+  # Single rough-precision trial, not a multi-trial average -- good enough to
+  # meaningfully tighten Phase 2's rotational odometry, worth a repeat with a
+  # precise angle marker (not eyeballed clock position) before trusting it
+  # into Phase 4 loop-closure comparisons. NOT YET fed back into the Fusion
+  # model -- geometric contact_radius (143) and kinematic L (138) may be
+  # legitimately different things; flag this for the next Fusion MCP session
+  # rather than silently overwriting the CAD's geometric figure.
+  contact_radius_mm:
+    wheel_1: 143.0
+    wheel_2: 143.0
+    wheel_3: 143.0
+  contact_radius_equal_all_three: true
+  kinematic_L_mm: 138.0   # see note above -- what the drive node actually uses
+
+  # Sanity check on the 120 deg assumption: measure the straight-line distance
+  # between adjacent contact patches. For a true 120 deg layout with radius R,
+  # every chord should equal R * sqrt(3) = R * 1.7320.
+  chord_between_adjacent_contacts_mm:
+    w1_to_w2: null
+    w2_to_w3: null
+    w3_to_w1: null
+
+# -----------------------------------------------------------------------------
+# WHEEL <-> SERVO MAP - easy to get wrong, silently wrecks the drive kinematics.
+# -----------------------------------------------------------------------------
+# For each servo ID on the bus (1, 2, 3), record which wheel it drives, that
+# wheel's angular position from +X, and which way the wheel pushes the robot
+# when the servo is commanded a POSITIVE speed.
+#
+# To find the spin direction: with the robot lifted off the floor, command one
+# servo a small positive speed and note whether the wheel's contact point would
+# push the chassis clockwise or counter-clockwise seen from above.
+# RESOLVED 2026-09-03: pulsed each servo individually in wheel mode (low
+# speed, ~35 deg, robot on the floor) and watched which physical wheel
+# turned and which way. See CAD_CONTEXT.md Sec. "Answered 2026-09-03" and
+# ~/wheel_probe.py on the robot. NOT YET applied in Fusion -- the CAD's
+# wheel_1/wheel_2/wheel_3 component names do not yet correspond to these
+# servo IDs; the ROS URDF has the fix applied via a `theta` override at each
+# xacro:omni_wheel call site rather than renaming the CAD-exported links.
+servo_wheel_map:
+  - servo_id: 1
+    wheel: wheel_1
+    angle_deg: 300               # front-right (-60 deg)
+    positive_spin_pushes: ccw
+  - servo_id: 2
+    wheel: wheel_2
+    angle_deg: 60                 # front-left
+    positive_spin_pushes: ccw
+  - servo_id: 3
+    wheel: wheel_3
+    angle_deg: 180                 # rear
+    positive_spin_pushes: ccw
+
+# -----------------------------------------------------------------------------
+# CHASSIS
+# -----------------------------------------------------------------------------
+# STILL FULLY UNMEASURED. This is the block that blocks everything: without it
+# the CAD cannot produce a mass or an inertia tensor, which per CAD_CONTEXT §7
+# is the single biggest thing the model is supposed to buy us.
+chassis:
+  type: mixed                  # flat structural plate + folded sheet-metal shell over it
+  outline: truncated_triangle  # equilateral, corners cut off; wheel at each corner
+
+  # --- SHELL: MEASURED 2026-08-29. Heights are above the UPPER DECK's top
+  # --- face. The shell is a folded sheet, HOLLOW - not a closed box.
+  # --- Longitudinal profile, front (+X) to rear (-X):
+  # ---   front edge at shell_edge_height
+  # ---   -> rises to shell_ridge_height
+  # ---   -> shell_camera_flat_length of flat, tilted shell_camera_flat_angle
+  # ---      down toward the rear (so the camera looks UP)
+  # ---   -> falls back to shell_edge_height at the rear
+  # Fully MEASURED 2026-08-29, heights above the TOP OF THE BASE TRIANGLE,
+  # sheet thickness excluded from every figure.
+  shell_front_edge_height_mm: 34.0
+  shell_flat_start_from_front_mm: 43.0    # horizontal, from the sheet front edge
+  shell_flat_front_height_mm: 60.0        # camera ledge, front
+  shell_camera_flat_length_mm: 33.0
+  shell_flat_rear_height_mm: 55.0         # camera ledge, rear
+  shell_rear_edge_height_mm: 30.0
+  camera_front_setback_mm: 12.0           # camera front face BEHIND the 60 mm bend
+  # The shell is nearly flush with the base plate - NOT uniformly inset.
+  shell_front_gap_mm: 2.0                 # MEASURED, shell front edge inside the plate
+  shell_rear_gap_mm: 4.0                  # MEASURED, shell rear edge inside the plate
+  shell_bend_radius_mm: 1.5               # ESTIMATE - inner radius of each fold;
+                                          # outer = inner + sheet thickness = 3.5
+  # LEDGE ANGLE: 60->55 over 33 mm = 8.62 deg, vs the IMU's 4.89 deg for the
+  # camera. 2.2 mm of reading error over 33 mm covers it; the IMU wins.
+  shell_sheet_thickness_mm: 2.0       # MEASURED - 2 mm everywhere
+  shell_material: powder_coated_aluminium
+  shell_material_source: magnet_test        # CONFIRMED not magnetic 2026-08-29.
+                                            # The mass budget had independently
+                                            # predicted this before the test.
+  # STATED as "powder coated iron kind of material", but the mass budget
+  # rules steel out. At steel density the 2 mm shell is 602 g and base_link
+  # alone exceeds the 2088 g measured TOTAL. Crediting steel the Jetson
+  # correction and halving the retainer still leaves it 223 g over, which
+  # would force a 1.38 mm deck plate - not credible under three servos and
+  # a battery. Aluminium closes the budget at +1.3%.
+  # CONFIRM WITH A MAGNET. Powder coat hides the difference by eye.
+  shell_sides_open: true              # MEASURED - both long sides are open
+  shell_side_opening_height_mm: null  # ESTIMATE 22 in CAD. MEASURE.
+  shell_top_vent_pattern: true        # MEASURED - slot arrays on both top panels
+  shell_inset_from_plate_mm: null     # ESTIMATE 10 in CAD. MEASURE.
+
+  # SUPERSEDED: this block used to derive the deck height from a 165 mm
+  # camera reading. That reading was wrong. See the measured 100.0 below.
+
+  # --- everything below is STILL ESTIMATED. Values in brackets are what the
+  # --- Fusion model currently uses, as est_* User Parameters.
+  # MEASURED 2026-08-29 from the base plate: an equiangular hexagon with
+  # three long sides and three truncated corner flats. Everything else in
+  # the outline is derived from these two numbers.
+  outline_edge_length_mm: 195.0
+  outline_corner_flat_length_mm: 50.0
+  # DERIVED: parent triangle side = 195 + 2*50 = 295
+  #   edge apothem   = 295 / (2*sqrt(3))               = 85.16
+  #   corner apothem = 295/sqrt(3) - 50*sqrt(3)/2      = 127.02
+  # CROSS-CHECK: corner apothem 127.0 vs wheel inner face 130.5 -> 3.5 mm
+  # running clearance, from three independent measurements.
+  outline_edge_apothem_mm: 85.16      # DERIVED
+  outline_corner_apothem_mm: 127.02   # DERIVED
+  plate_thickness_mm: null            # [3] NOW THE DOMINANT UNMEASURED VALUE.
+                                      # At 3 mm the two decks are 521 g and the
+                                      # robot totals +11.6%; at 2 mm they are
+                                      # 347 g and it falls to ~+3%. CALIPERS.
+  plate_material: null                # NEEDED AS A DENSITY - photos cannot
+                                      # distinguish anodised aluminium from black FR4
+  # --- LOWER STACK, ALL MEASURED 2026-08-29 ---
+  battery_plate_bottom_above_floor_mm: 30.0   # floor to the underside of the bottom plate
+  standoff_bottom_to_middle_mm: 35.0
+  middle_plate_top_above_floor_mm: 69.0       # DERIVED 30+2+35+2
+  standoff_middle_to_upper_mm: 28.0
+  upper_deck_top_above_floor_mm: 100.0        # MEASURED directly, floor to top of base triangle
+  upper_deck_top_from_plate_chain_mm: 99.0    # 30+2+35+2+28+2 -> agrees to 1 mm.
+  # This RESOLVES the old 8.55 mm conflict. The early 165 mm camera reading was wrong.
+  # The middle plate is NOT triangular - it is the same 95x95 square as the
+  # battery plate, and carries no drive load.
+  middle_plate_shape: square_95x95
+  battery_plate_size_mm: 95.0
+  battery_slot_mm: [43.0, 74.0]               # width x length, OPEN at the front edge
+  standoff_count_upper: 4                     # upper deck -> middle plate
+  standoff_count_lower: 4                     # middle plate -> battery plate
+  standoff_positions_mm: "+/-43 x, +/-43 y, aligned columns"
+  standoff_diameter_mm: null                  # [6] ESTIMATE
+  # Servos hang from the UPPER deck on long CUSTOM U brackets, 72 mm from
+  # the servo underside to the deck underside. Waveshare's STEP ships the
+  # SHORT standard brackets (FK-US-001/002); both were deleted.
+  servo_bracket_length_mm: 72.0               # DERIVED 97.0 - 25.0
+  servo_bracket_thickness_mm: null            # [3] ESTIMATE
+  servo_bracket_count_per_servo: 2            # BOTH faces perpendicular to the shaft
+  servo_bracket_top_above_floor_mm: 98.0      # deck underside
+  servo_bracket_bottom_above_floor_mm: 47.0   # servo MID-HEIGHT - clears the 37 mm shaft by 10
+  servo_bracket_width_mm: 20.2                # EXACTLY the servo body width
+  # The bracket arms land on the servo's FLAT MOUNTING FACES, which are inboard
+  # of the case bounding extremes. Both offsets MEASURED in CAD:
+  servo_inner_face_inset_mm: 5.702            # extreme there is the rear cover boss
+  servo_outer_face_inset_mm: 1.49             # extreme there is the output boss
+  servo_mount_face_inner_radius_mm: 68.902    # DERIVED
+  servo_mount_face_outer_radius_mm: 109.010   # DERIVED
+  servo_bracket_web_above_floor_mm: 67.1      # saddle web sits on the servo top face
+  # NOTE: servo_outer_face_radius (110.5) is NOT taken from the stock bracket.
+  # It is contact_radius - wheel_width/2 - coupler_length = 143 - 12.5 - 20,
+  # so it inherits the 20 mm COUPLER ESTIMATE. Measure the coupler to firm it up.
+  plate_corner_fillet_mm: 5.0                 # ESTIMATE - rounded corners, all three plates
+  shell_bend_fillet_inner_mm: 1.5             # ESTIMATE - rounded sheet folds
+  servo_bracket_faces: perpendicular_to_shaft # fore/aft along the servo axis,
+                                              # same faces as the stock bracket,
+                                              # NOT the broad side faces
+  servo_bracket_outer_plate_has_coupler_hole: true
+
+# -----------------------------------------------------------------------------
+# SERVOS - WAVESHARE ST3020, TTL serial bus, IDs 1/2/3 at 1 Mbaud on /dev/ttyACM0
+# -----------------------------------------------------------------------------
+# NOTE: an earlier revision of this file carried a header comment reading
+# "Feetech ST3215". That was the stale claim from SETUP_LOG.md and is WRONG.
+# The servos are Waveshare ST3020, read off the labels and confirmed in photos
+# 2, 3, 8, 10, 11 and 13.
+servos:
+  model: ST3020
+
+  # Official Waveshare STEP, downloaded and imported into the Fusion model.
+  # The archive is RAR5; macOS bsdtar extracts it with `tar -xf`.
+  step_file_source: "https://files.waveshare.com/upload/6/61/St3020_servo.rar"
+  step_file_local: "~/Documents/kaya_cad_downloads/st3020/st3020 servo.stp"
+  step_file_note: |
+    Internal assembly is named SCS15_20220928_ASM - Waveshare's ST3020 shares
+    the Feetech SCS15 case casting. 17 solids: three case shells, output gear,
+    PCB stack, horn screws. Good enough for a real inertia tensor rather than a
+    block approximation.
+
+  # Envelope measured off the imported STEP (case shells only: top + middle +
+  # bottom). The 20.2 and 40.2 match Waveshare's published spec exactly, which
+  # is the confirmation that this is the right body.
+  body_length_mm: 40.2
+  body_width_mm: 20.2
+  body_height_mm: 47.3
+  body_dims_source: waveshare_step
+  body_dims_note: |
+    Waveshare's spec sheet states 40.2 x 20.2 x 40 mm. The 40 excludes the
+    output boss; over the boss the real part is 47.3 mm. Use 47.3 for clearance
+    checks, 40 only when comparing against the datasheet.
+
+  # From the STEP: the output shaft axis sits 4.7 mm below the top of the case
+  # and ~10 mm off the case centre along its length. Combined with the coupler
+  # length this gives shaft_to_wheel_centre_mm directly.
+  shaft_axis_below_case_top_mm: 4.7
+  shaft_axis_offset_from_case_centre_mm: 10.1
+  shaft_axis_source: waveshare_step
+
+  # How the servo sits: is the output shaft horizontal (normal for a wheel) and
+  # does the body point inward toward the centre or outward?
+  mount_orientation: shaft_horizontal_radial_outward   # from photos 2, 3, 11
+  # Along the shaft, from the servo body face to the wheel's centre plane.
+  # STILL NEEDED - this is the metal coupler standoff, and it is the only
+  # remaining number required to place the servos against the existing wheels.
+  shaft_to_wheel_centre_mm: null
+  # Height of the output shaft axis above the floor. Should equal the wheel
+  # rolling radius (37 mm) if the wheel is mounted concentric to the shaft.
+  shaft_axis_height_mm: null
+  bracket_length_mm: null
+  bracket_width_mm: null
+  bracket_thickness_mm: null
+
+  # Step response, MEASURED 2026-09-27 (0.1 m/s forward/back through
+  # drive_node): 30 Hz drive loop, then 27.5 ms bus + firmware delay, then the
+  # servo's own speed loop as a 2nd-order system. Wheel reaches 10% of speed
+  # 0.101 s after the command, overshoots 16%, stops in 0.134 s.
+  response:
+    control_rate_hz: 30
+    delay_ms: 27.5
+    natural_freq_rad_s: 31.0
+    damping_ratio: 0.60
+
+# -----------------------------------------------------------------------------
+# CAMERA - Orbbec Gemini 335L
+# -----------------------------------------------------------------------------
+camera:
+  model: Gemini 335L
+  serial: CP3C641000JS
+  firmware: 1.3.25
+
+  # Official Orbbec CAD bundle (STP + DWG + PDF), imported into the Fusion model.
+  step_file_source: "https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini_335L_CAD_Files.zip"
+  step_file_local: "~/Documents/kaya_cad_downloads/gemini335L/Gemini_335L_CAD_Files/02 3D/[3D][STP]Gemini 335L Asm with FOV_20240516.stp"
+  step_file_index: "https://www.orbbec.com/docs/g330-download-cad-files/"
+
+  # Envelope measured off the imported STEP.
+  body_width_mm: 124.1         # long axis (the 95 mm stereo baseline runs along this)
+  body_height_mm: 29.1
+  body_depth_mm: 29.3
+  body_dims_source: orbbec_step
+  body_dims_note: |
+    STEP bbox is 124.1 x 29.1 x 29.3. The height/depth assignment above follows
+    the datasheet's W x H x D ordering (124 x 29 x 29.5); the two are only
+    0.2 mm apart so a swap is harmless for collision, but confirm before relying
+    on it for the optical-centre correction.
+    ACTION: the staged URDF's camera visual box is <box size="0.025 0.150 0.030">
+    - that is 26 mm too WIDE and ~4 mm too SHALLOW. Regenerate it from these.
+    The STEP's own origin is at the midpoint of the long axis, which is a
+    MECHANICAL datum, not the optical centre.
+
+  # Measure to the FRONT FACE of the depth module, from base_link's origin.
+  # The generator corrects to the optical centre using the factory intrinsics,
+  # so do not try to estimate the internal sensor position yourself.
+  # WARNING: the value below was measured to the module CENTRE, not the front
+  # face, despite the field name. If the generator applies a front-face ->
+  # optical-centre correction on top of it, the offset will be double-counted.
+  # Either rename this field or subtract body_depth_mm/2 first.
+  front_face_x_mm: 21.81       # DERIVED: camera REAR rests on the ledge rear bend.
+  front_face_x_source: derived_from_shell
+  # The early direct reading of 25.0 is SUPERSEDED. The relative chain
+  # (shell front edge -> 43 mm bend -> 12 mm setback) is the reliable one.
+  front_face_y_mm: 0.0
+  front_face_z_mm: 173.72      # DERIVED. Ledge outer face at the rear bend is
+                               # 100+55+2 = 157.00, matching your measured 157.
+                               # A direct reading gave 165.0; the ledge
+                               # geometry and the plate stack both say 173.10.
+                               # RESOLVE by measuring floor -> top of the base
+                               # triangle: 99.0 confirms 173.10, 90.45 confirms 165.
+                               # base_link sits 37 mm up, so camera_z in the URDF
+                               # is 165-37 = 128 mm.
+
+  # DO NOT measure pitch/roll with a protractor. The IMU measures it far better:
+  # with the robot on a level floor, the gravity vector's deviation from the
+  # optical frame's Y axis IS the mount tilt. Filled in by the measurement node.
+  mount_pitch_deg: -4.89       # NOSE UP 4.89 deg (negative = up in this file's sign)
+  mount_roll_deg: -0.94          # MAGNITUDE right, SIGN is this file's own: in
+                                 # REP-103 the camera is rolled +0.94 deg (RIGHT
+                                 # side lower). Proven 2026-09-27 against the real
+                                 # IMU's resting accel (x = -0.161 m/s^2, optical).
+                                 # The URDF previously used -0.94 and was wrong.
+  mount_yaw_deg: null
+  mount_measured_by: imu_gravity_vector   # agrees with visual estimate to 0.1 deg
+
+  # camera_link = the LEFT IR LENS (the Orbbec driver's depth origin), not the
+  # body centre above. Offset lens-from-body-centre in the camera's own axes
+  # (x fwd, y left, z up), from Orbbec geometry via NVIDIA's Gemini 335L asset;
+  # confirmed on the robot 2026-09-27 with a bottle on the centre line.
+  depth_origin_from_body_centre_mm: [2.3, 47.5, 0.55]
+  # From the driver itself (camera_info + /tf_static), 2026-09-27, 848x480:
+  ir_fx_px: 408.162
+  stereo_baseline_mm: 94.86
+  color_from_left_ir_mm: [-0.19, -23.75, 0.0]
+  imu_from_left_ir_mm: [-14.25, -7.89, -1.09]   # camera_gyro_frame, body axes
+  bracket_description: "small fixed bracket on top of the shell at the front apex; not adjustable"
+
+  # Built-in IMU: 6-axis, no magnetometer, 203 Hz, device timestamps.
+  imu_gyro_noise_sd_rad_s: 0.0005
+  imu_accel_noise_sd_m_s2: 0.006
+
+# -----------------------------------------------------------------------------
+# COMPUTE / POWER / OTHER
+# -----------------------------------------------------------------------------
+compute:
+  module: Jetson Orin Nano 8GB
+  module_pn: p3767-0003
+  carrier: p3768-0000
+  sku_fuse: "0xD5"
+  # Envelope from the free OBJ mesh at
+  # https://wendy.dev/blog/free-nvidia-jetson-orin-nano-3d-model
+  # (124 MB, ~1M faces - far too heavy to import; used for dimensions only.
+  # The carrier inside it measures exactly 100.00 x 79.00 mm, confirming the
+  # mesh is in millimetres.)
+  envelope_depth_mm: 90.74     # fore-aft, INCLUDING the 10 mm port overhang
+  envelope_width_mm: 103.0     # left-right, PCB 100 + 1.5 connector each side
+  envelope_height_mm: 34.77    # carrier + module + heatsink + fan
+  envelope_source: wendy_dev_obj_mesh
+  ports_face: rear             # -X. The port bank overhangs 10 mm on that edge;
+                               # every other edge overhangs only ~1.5 mm.
+  # FIT RESULT: it fits, with ~7 mm headroom at its front edge, but only in the
+  # window centre_x = 4.6 .. 17.6 mm. Below 4.6 the 103 mm width fouls the
+  # converging rear shell walls; above 17.6 the top fouls the shell.
+  # There is NO room left for a separate chassis fan in front of it, which is
+  # itself evidence the deck outline estimate is too small.
+  centre_x_mm: null            # [10] ESTIMATE in CAD, within the window above
+  # Centre of the carrier board, relative to base_link origin.
+  centre_x_mm: null
+  centre_y_mm: null
+  centre_z_mm: null
+  board_length_mm: null
+  board_width_mm: null
+  orientation_deg: null        # board's long axis vs +X
+
+battery:
+  chemistry: null              # "SHARE+ MAX 2.0Ah" 20V power-tool pack
+  model: "SHARE+ MAX 20V 2.0Ah"
+  centre_x_mm: null
+  centre_y_mm: null
+  centre_z_mm: null
+  length_mm: null
+  width_mm: null
+  height_mm: null
+  # The pack slides in on rails and is removable. Model the ENVELOPE PLUS the
+  # clearance the slide needs, not just the pack outline.
+  slide_clearance_mm: null
+
+imu_mpu6050:                   # legacy/fallback sensor; still on the robot
+  centre_x_mm: null
+  centre_y_mm: null
+  centre_z_mm: null
+
+# -----------------------------------------------------------------------------
+# MASS - Isaac Sim is only worth running with real masses. Sim-to-real transfer
+# is mostly a mass, inertia and friction problem. A kitchen scale is enough.
+# -----------------------------------------------------------------------------
+# The 2.088 kg total only constrains the SUM. Every individual figure below is
+# still needed before any per-link inertia tensor means anything.
+mass_g:
+  total_robot: 2088.0          # MEASURED
+  one_wheel: 112.0              # MEASURED 2026-09-27, hub + rollers, WITHOUT the
+                               # shaft coupler. CAD said 58.45 (63 at real
+                               # densities) - rollers are not solid rubber.
+  one_servo: null              # Waveshare does not publish a mass for the
+                               # ST3020 on the wiki page; weigh one.
+  battery: null
+  jetson_plus_carrier: null
+  camera: 164.0
+  camera_source: orbbec_datasheet    # "164 g +/- 3 g" - verify on a scale
+  chassis_bare: null           # plates + standoffs + fasteners, nothing mounted
+
+# -----------------------------------------------------------------------------
+# FRICTION - tilt test, 2026-09-27
+# -----------------------------------------------------------------------------
+# The whole robot, on a table, SLIDES (does not roll) once the table is tilted
+# to 15 deg. This is NOT mu = tan(15) = 0.27: omni rollers turn freely
+# sideways, so only the part of friction along each wheel's rolling direction
+# resists. The coefficient that reproduces 15 deg is found by running the same
+# test in Isaac Sim - see kaya_description/usd/tilt_test.py.
+friction:
+  tilt_slide_angle_deg: 15.0
+  surface: table
+  robot_heading_downhill: camera   # camera pointing down the slope
+  calibrated_roller_mu_static: 0.40   # sim: 14.6 deg CPU, 15.6 deg GPU (tilt_test.py)
+  servo_torque_enabled: null     # were the servos holding during the test?
+
+# -----------------------------------------------------------------------------
+# DERIVED - do not fill these in. The generator computes them from the above and
+# writes them back, so you can check they match what you expect.
+# -----------------------------------------------------------------------------
+derived:
+  wheel_rolling_radius_mm: null
+  chassis_radius_mean_mm: null
+  chassis_radius_spread_mm: null
+  wheel_angles_from_chords_deg: null   # cross-check against servo_wheel_map
+  base_link_height_above_floor_mm: null
+  camera_optical_centre_in_base_link_mm: null
+
+# -----------------------------------------------------------------------------
+# SOURCE TAGS - what each *_source value means
+# -----------------------------------------------------------------------------
+sources:
+  waveshare_step: |
+    Measured off Waveshare's official ST3020 STEP file after import into Fusion.
+    Manufacturer CAD, not hardware measurement. A hardware measurement overrides
+    it if the two disagree.
+  orbbec_step: |
+    Measured off Orbbec's official Gemini 335L STEP file after import into
+    Fusion. Manufacturer CAD, not hardware measurement.
+  orbbec_datasheet: |
+    Quoted from the Orbbec Gemini 335L datasheet. Not verified on hardware.
+  photo_count: |
+    Counted from the robot photos of 2026-08-28. Confirm by eye on the real part
+    - but note this only affects visual appearance, never kinematics.
+  derived_from_row_width: |
+    Computed from other values in this file rather than measured. Cosmetic only.
+
+# -----------------------------------------------------------------------------
+# OPEN QUESTIONS - blocking full URDF/CAD accuracy
+# -----------------------------------------------------------------------------
+open_questions:
+  # RESOLVED 2026-08-28: effective contact plane = 143 mm (assembly mid-plane).
+  # RESOLVED 2026-08-28: 165 mm is from the floor. URDF camera_z = 0.128 m.
+  # RESOLVED 2026-08-28 (r2): servo and camera body envelopes, from vendor STEP.
+  # RESOLVED 2026-09-03: servo_id_to_wheel_angle and servo_spin_direction, by
+  # pulsing each servo on the real robot -- see servo_wheel_map above.
+  # REFINED 2026-09-03: kinematic L = 138.0 mm via 10-turn spin test -- see
+  # wheels.kinematic_L_mm above. Geometric contact_radius_mm left at 143 (the
+  # CAD measurement) since the two may legitimately differ.
+
+  - id: chassis_geometry
+    blocking: true
+    q: >
+      The entire `chassis:` block is null: triangle outline, plate thickness,
+      plate MATERIAL (needed as a density), the three deck heights above the
+      floor, and standoff lengths/count. Until these exist the CAD cannot
+      compute a mass or an inertia tensor, which is the main reason to build it.
+      This is the single highest-value thing to measure next.
+
+  - id: component_masses
+    blocking: true
+    q: >
+      one_wheel, one_servo, battery, jetson_plus_carrier, chassis_bare. The
+      2.088 kg total constrains only the sum, so every per-link tensor is
+      currently unanchored.
+
+  - id: coupler_standoff
+    q: >
+      servos.shaft_to_wheel_centre_mm - the distance from the servo body face to
+      the wheel centre plane through the metal coupler. With the STEP-derived
+      shaft position this is the ONLY number still needed to place the three
+      servos correctly against the wheels already built in Fusion.
+
+  - id: rolling_radius_under_load
+    q: >
+      74 mm is presumably a caliper reading. Redo as a loaded 10-revolution roll
+      test; roller compression under 2.088 kg changes the effective radius and
+      that value is what odometry consumes.
+
+  - id: omni_wheel_identity
+    blocking: false
+    q: >
+      Not matched to any catalogue part. If a vendor name or a marking on the
+      aluminium hub turns up, a real STEP replaces the photo-derived roller
+      block. Cosmetic only - the simulated wheel is a cylinder either way.
+
+  - id: mpu6050_position
+    q: >
+      Only affects the legacy fallback sensor. A ruler closes it.
