@@ -10,8 +10,6 @@
   <exec_depend>orbbec_camera</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>joint_state_publisher</exec_depend>
-  <exec_depend>robot_localization</exec_depend>
-  <exec_depend>rtabmap_launch</exec_depend>
   <exec_depend>isaac_ros_visual_slam</exec_depend>
   <!-- cuvslam_origin_anchor: reads the tracker's status and localization
        verdict, and verifies the pose it produced against TF. -->

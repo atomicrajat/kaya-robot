@@ -99,6 +99,10 @@ link.
     curriculum.html
     backup_before_flash.sh
 
+**Moved 2026-09-27:** the provisioning scripts and `SETUP_LOG.md` are now in
+the repo at `robot_setup/`; `cad/` is in the repo at `kaya_description/cad/`;
+`maps/` was deleted - every file was an exact copy of one in `robot_maps/`.
+
 `git fsck` is clean and the working tree has no modifications. `origin` points
 at the robot over ssh, and the remote-tracking ref matches — nothing is
 unpushed.

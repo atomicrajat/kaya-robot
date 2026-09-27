@@ -44,6 +44,22 @@ ROBOT'S ACTUAL POSE, looked up from TF. An earlier version assumed the robot
 sat at map (0,0) and reported "0 observed cells" -- indistinguishable from a
 broken costmap -- the moment it did not.
 
+`blur_check.py` -- SHARPNESS (variance of the Laplacian) of the IR image, not
+just brightness. Motion blur is invisible at rest and destroys tracking the
+moment the robot drives: 1.4 mm drift standing still, 15-32% under motion.
+
+`imu_cam_sync.py` -- image-timestamp jitter and IMU-vs-image clock skew.
+cuVSLAM fuses a 200 Hz IMU with 30 Hz images; jitter between them is
+unmodelled rotation, zero at rest and proportional to error once moving.
+
+`save_2d_map.py` -- writes nvblox's occupancy grid as a standard PGM + YAML
+map. nav2's map_saver_cli refuses it (nvblox publishes volatile, the saver
+expects latched); subscribing with matching QoS is simpler.
+
+`kaya.sh` -- bring the whole robot up from the workstation: robot stack, then
+the dashboard (`./kaya.sh`, `./kaya.sh stop`, `./kaya.sh status`). Put the
+robot on the mark first - relocalisation depends on it.
+
 ## The measurement lesson worth keeping
 
 Several of these were written after a wrong diagnosis, and the pattern repeats:

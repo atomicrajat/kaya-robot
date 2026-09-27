@@ -6,7 +6,6 @@ perception chain before letting kaya_follower.py act on it.
 
     ../perception_venv/bin/python perception/detect_live.py "a red backpack" ...
 """
-import math
 import os
 import sys
 import time

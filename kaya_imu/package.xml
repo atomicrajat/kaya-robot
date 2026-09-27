@@ -3,7 +3,7 @@
 <package format="3">
   <name>kaya_imu</name>
   <version>0.1.0</version>
-  <description>MPU6050 IMU driver for the Kaya robot. Publishes calibrated sensor_msgs/Imu.</description>
+  <description>Conditions the Gemini 335L camera IMU for the Kaya robot. Publishes sensor_msgs/Imu.</description>
   <maintainer email="atomicrajat619@gmail.com">Rajat</maintainer>
   <license>Apache-2.0</license>
 
@@ -13,7 +13,6 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>python3-smbus2</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

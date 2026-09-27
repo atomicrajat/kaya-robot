@@ -9,12 +9,17 @@ Two conversions matter and are easy to get silently wrong:
     metres, which is what every other number in this project is in;
   * the stage is Z-up and three.js is Y-up, so (x, y, z) -> (x, z, -y).
 """
-import json, struct, sys
+import json, os, struct, sys
 import numpy as np
-from pxr import Usd, UsdGeom, UsdShade, Gf
+from pxr import Usd, UsdGeom, UsdShade
 
-SRC = "/home/rajatmr/work_projects/kaya_robot/kaya_robot_ttb.usdz"
-DST = "/home/rajatmr/work_projects/kaya_robot/kaya/dashboard/static/kaya_robot.glb"
+#   ~/isaac-sim/python.sh dashboard/usd_to_glb.py [SRC.usdz] [DST.glb]
+# Defaults: the Fusion export committed with the Isaac Sim asset, and the
+# model this dashboard serves.
+HERE = os.path.dirname(os.path.abspath(__file__))
+SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+    HERE, os.pardir, "kaya_description", "usd", "source", "kaya_robot_ttb.usdz")
+DST = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "static", "kaya_robot.glb")
 
 stage = Usd.Stage.Open(SRC)
 mpu = UsdGeom.GetStageMetersPerUnit(stage)

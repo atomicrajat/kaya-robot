@@ -63,7 +63,12 @@ import tf2_ros
 # perception/ sits beside dashboard/ in the repo, not on the path.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 os.pardir, 'perception'))
-KEYFRAME_DIR = os.path.expanduser('~/work_projects/kaya_robot/keyframes')
+# Data that is not source (keyframes, the 719 MB map store) lives in the
+# workspace folder that CONTAINS this repo - ~/work_projects/kaya_robot on the
+# dev machine. KAYA_WORKSPACE overrides it on any other machine.
+WORKSPACE = os.environ.get('KAYA_WORKSPACE', os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir)))
+KEYFRAME_DIR = os.path.join(WORKSPACE, 'keyframes')
 
 try:
     import scene_memory
@@ -85,8 +90,7 @@ except ImportError:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # The saved map lives outside the repo -- it is 719 MB of map store, not source.
-BASE_MAP = os.path.expanduser(
-    '~/work_projects/kaya_robot/robot_maps/home_final/home_2d')
+BASE_MAP = os.path.join(WORKSPACE, 'robot_maps', 'home_final', 'home_2d')
 PORT = int(os.environ.get('KAYA_DASH_PORT', '8080'))
 # Beyond this the robot is treated as gone, not merely quiet.
 STALE_S = 5.0

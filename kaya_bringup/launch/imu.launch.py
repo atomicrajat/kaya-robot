@@ -44,14 +44,13 @@ def generate_launch_description():
                                           'zero-filling placeholder below must not also publish '
                                           'there or the two fight over the same topic.'),
         DeclareLaunchArgument('enable_color', default_value='false',
-                              description='Phase 1-3 need no colour; Phase 4 (RTAB-Map/VSLAM) does.'),
+                              description='Phase 1-3 need no colour.'),
         DeclareLaunchArgument('depth_registration', default_value='false',
                               description='Align depth to the colour frame -- needed for RGB-D SLAM, '
                                           'not for plain IMU/TF bringup.'),
         DeclareLaunchArgument('enable_color_undistortion', default_value='false',
                               description='Publish rectified colour (and zeroed distortion coeffs '
-                                          'in camera_info). Required by RGB-D SLAM -- see '
-                                          'slam_rtabmap.launch.py.'),
+                                          'in camera_info). Required by RGB-D consumers.'),
         DeclareLaunchArgument('color_width', default_value='0'),
         DeclareLaunchArgument('color_height', default_value='0'),
         DeclareLaunchArgument('depth_width', default_value='0'),

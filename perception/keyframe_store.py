@@ -200,7 +200,11 @@ class KeyframeStore(Node):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--dir', default='~/work_projects/kaya_robot/keyframes')
+    # default: <workspace>/keyframes, the workspace being the folder that
+    # contains this repo (KAYA_WORKSPACE overrides) - see scene_memory.py
+    ap.add_argument('--dir', default=os.path.join(os.environ.get(
+        'KAYA_WORKSPACE', os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                       os.pardir, os.pardir)), 'keyframes'))
     ap.add_argument('--image-topic', default='/kaya/perception/color')
     ap.add_argument('--min-move-m', type=float, default=1.0)
     ap.add_argument('--min-turn-deg', type=float, default=45.0)

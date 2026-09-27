@@ -1,7 +1,6 @@
 """Phase 5: autonomous navigation -- SLAM + nvblox + Nav2.
 
     ros2 launch kaya_bringup nav.launch.py
-    ros2 launch kaya_bringup nav.launch.py slam:=rtabmap    # RGB-D route
 
 Building a map (nothing forgotten) vs. navigating (people not fused in):
 
@@ -54,8 +53,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import (EqualsSubstitution, LaunchConfiguration,
-                                  PythonExpression)
+from launch.substitutions import (LaunchConfiguration, PythonExpression)
 from launch_ros.actions import Node
 
 
@@ -75,9 +73,6 @@ def generate_launch_description():
     nav2_cfg = os.path.join(bringup_share, 'config', 'nav2.yaml')
 
     return LaunchDescription([
-        DeclareLaunchArgument('slam', default_value='cuvslam',
-                              description='cuvslam (stereo IR + IMU, the real target) or '
-                                          'rtabmap (RGB-D reference route).'),
         DeclareLaunchArgument('nav2', default_value='true',
                               description='Set false to bring up SLAM + nvblox only, e.g. to '
                                           'inspect the costmap before letting the robot plan.'),
@@ -169,7 +164,6 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(bringup_share, 'launch', 'slam_cuvslam.launch.py')),
-            condition=IfCondition(EqualsSubstitution(LaunchConfiguration('slam'), 'cuvslam')),
             launch_arguments={
                 'depth_for_nvblox': 'true',
                 'enable_color': LaunchConfiguration('enable_color'),
@@ -179,11 +173,6 @@ def generate_launch_description():
                 'hint_y': LaunchConfiguration('hint_y'),
                 'hint_yaw': LaunchConfiguration('hint_yaw'),
             }.items(),
-        ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(bringup_share, 'launch', 'slam_rtabmap.launch.py')),
-            condition=IfCondition(EqualsSubstitution(LaunchConfiguration('slam'), 'rtabmap')),
         ),
 
         # ------------------------------------------------------- camera tuner

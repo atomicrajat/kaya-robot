@@ -20,13 +20,11 @@ setup(
     zip_safe=True,
     maintainer='Rajat',
     maintainer_email='atomicrajat619@gmail.com',
-    description='MPU6050 IMU driver for the Kaya robot.',
+    description='Conditions the Gemini 335L camera IMU for the Kaya robot.',
     license='Apache-2.0',
     entry_points={
         # 'name = module:function' -> creates the executable `ros2 run kaya_imu <name>`
         'console_scripts': [
-            'imu_node = kaya_imu.imu_node:main',
-            'calibrate = kaya_imu.calibrate:main',
             'camera_imu_node = kaya_imu.camera_imu_node:main',
         ],
     },

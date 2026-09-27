@@ -1,0 +1,16 @@
+# Perception on the workstation (OWLv2 open-vocabulary detection, keyframes,
+# scene memory). Versions are what the working venv held on 2026-09-27.
+#
+#   python3 -m venv --system-site-packages ../perception_venv
+#   ../perception_venv/bin/pip install -r perception/requirements.txt \
+#       --extra-index-url https://download.pytorch.org/whl/cu128
+#
+# --system-site-packages is deliberate: rclpy, tf2_ros and the ROS messages
+# come from /opt/ros/jazzy (source it first), and OpenCV (cv2) from the
+# system python3-opencv package. scene_memory.py also needs a local Ollama
+# server with the model in KAYA_VLM (default qwen2.5vl:7b).
+torch==2.11.0
+torchvision==0.26.0
+transformers==5.17.0
+numpy==1.26.4
+pillow==10.2.0

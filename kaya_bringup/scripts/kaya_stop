@@ -110,9 +110,10 @@ fi
 
 echo "==> releasing servos over the bus (belt and braces)"
 BUS_RELEASE=/tmp/kaya_release.py
+export KAYA_DRIVE_SRC="${KAYA_DRIVE_SRC:-/home/orin-nano/ros2_ws/src/kaya/kaya_drive}"
 cat > "$BUS_RELEASE" <<'PYEOF'
-import sys
-sys.path.insert(0, "/home/orin-nano/ros2_ws/src/kaya/kaya_drive")
+import os, sys
+sys.path.insert(0, os.environ["KAYA_DRIVE_SRC"])
 from kaya_drive.feetech_bus import FeetechBus
 from kaya_drive.scservo_sdk import COMM_SUCCESS
 

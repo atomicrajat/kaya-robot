@@ -303,7 +303,8 @@ def generate_launch_description():
                 # floor the robot was standing on.
                 #
                 # This is the SECOND time this exact mismatch has bitten this
-                # project -- see slam_rtabmap.launch.py, where the SW aligner
+                # project -- the RTAB-Map route (removed 2026-09-27; in git history
+                # as kaya_bringup/launch/slam_rtabmap.launch.py), where the SW aligner
                 # silently passed ~15% of frames through UNALIGNED at the same
                 # 1280x720/848x480 pairing. The lesson did not transfer to this
                 # route because the resolutions are set per-launch-file. If a

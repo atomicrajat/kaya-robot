@@ -64,7 +64,12 @@ import urllib.request
 
 OLLAMA = os.environ.get('OLLAMA_HOST', 'http://127.0.0.1:11434')
 MODEL = os.environ.get('KAYA_VLM', 'qwen2.5vl:7b')
-STORE = os.path.expanduser('~/work_projects/kaya_robot/keyframes')
+# Data that is not source (keyframes, the 719 MB map store) lives in the
+# workspace folder that CONTAINS this repo - ~/work_projects/kaya_robot on the
+# dev machine. KAYA_WORKSPACE overrides it on any other machine.
+WORKSPACE = os.environ.get('KAYA_WORKSPACE', os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir)))
+STORE = os.path.join(WORKSPACE, 'keyframes')
 
 # A KEYFRAME POSE IS WHERE THE CAMERA WAS, NOT WHERE THE THING IS.
 # The first version of this prompt asked for prose, and it conflated the two.

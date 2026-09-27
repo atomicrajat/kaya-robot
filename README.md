@@ -8,9 +8,12 @@ workstation on 2026-09-08.
 
 | Package | Purpose |
 |---|---|
-| `kaya_imu` | IMU conditioning. `camera_imu_node` is the production path (Gemini 335L built-in IMU); `imu_node` + `mpu6050.py` drive the external MPU-6050 and are kept only as a fallback. |
+| `kaya_imu` | IMU conditioning. `camera_imu_node` conditions the Gemini 335L's built-in IMU. (The external MPU-6050 was physically removed; its driver was deleted 2026-09-27 and is in git history.) |
 | `kaya_description` | URDF/xacro. Publishes `base_link -> camera_link`; the Orbbec driver supplies the rest of the camera chain. |
 | `kaya_bringup` | Launch composition. |
+
+**Rebuilding the robot:** `robot_setup/` - provisioning, health check,
+pre-flash backup, and the full setup log.
 
 **Simulation:** Kaya as an Isaac Sim robot, calibrated against this one -
 `kaya_description/usd/README.md`. The measurements behind the URDF and the

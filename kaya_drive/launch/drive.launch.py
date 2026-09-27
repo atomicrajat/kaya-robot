@@ -12,9 +12,9 @@ Then drive it:
 
     ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
-Phase 3 (curriculum Sec. 03) fuses this with the IMU via an EKF, which then
-owns odom -> base_footprint instead of this node -- see
-kaya_bringup/launch/localization.launch.py, which sets publish_tf:=false here.
+publish_tf:=false hands odom -> base_footprint to another estimator. The
+Phase 3 EKF that did that (kaya_bringup localization.launch.py) was removed
+2026-09-27 with the RTAB-Map route; cuVSLAM is the production localiser.
 """
 
 from launch import LaunchDescription
