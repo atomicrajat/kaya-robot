@@ -3,3 +3,4 @@ __pycache__/
 build/
 install/
 log/
+kaya_description/usd/test_output/
