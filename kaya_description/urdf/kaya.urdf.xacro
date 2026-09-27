@@ -72,7 +72,14 @@
   <xacro:property name="camera_y" value="0.000"/>         <!-- MEASURED -->
   <xacro:property name="camera_z" value="${0.17372 - wheel_radius}"/>  <!-- DERIVED, see note -->
   <xacro:property name="camera_pitch" value="-0.0853"/>   <!-- MEASURED (IMU), nose UP -->
-  <xacro:property name="camera_roll"  value="-0.0164"/>   <!-- MEASURED (IMU) -->
+  <!-- ROLL SIGN CORRECTED 2026-09-27: was -0.0164. The magnitude came from
+       the IMU but the sign flipped converting to REP-103. At rest the real
+       Gemini IMU reads accel x = -0.161 m/s^2 in its optical frame (x right),
+       i.e. gravity pulls toward the camera's RIGHT: the right side is LOWER,
+       which is POSITIVE roll about +X. Isaac Sim, with the Orbbec driver's own
+       IMU placement, reproduced -0.161 only with this sign (+0.160 with the
+       old one). Pitch was right: sim +0.835 vs real +0.834 on the z axis. -->
+  <xacro:property name="camera_roll"  value="0.0164"/>    <!-- MEASURED (IMU) -->
 
   <!-- Gemini 335L from Orbbec's STEP. Robot axes: X = depth (optical),
        Y = the 95 mm stereo baseline, Z = height. -->
@@ -81,15 +88,16 @@
   <xacro:property name="camera_box_z" value="0.0291"/>
 
   <xacro:property name="total_mass" value="2.088"/>       <!-- MEASURED -->
-  <xacro:property name="wheel_mass" value="0.05845"/>     <!-- CAD-DERIVED -->
+  <!-- MEASURED 2026-09-27 on a scale: 112 g for one wheel (hub + rollers),
+       WITHOUT the shaft coupler. The CAD said 58.45 g - it models the
+       rollers as solid rubber, and the real ones carry metal pins/hubs. -->
+  <xacro:property name="wheel_mass" value="0.112"/>       <!-- MEASURED -->
 
   <!-- base_link mass from CAD geometry + real densities.
-       CAD total (base + 3 wheels + camera) = 1.949 kg vs 2.088 measured,
-       6.7% light. The gap is almost entirely the servos: Waveshare's STEP
-       is a SHAPE model with no windings, magnets or steel gear train, and
-       computes to 30.5 g against a realistic 80-95 g for this class.
-       Substituting 85 g servos puts the total at 2.113 kg, +1.2%.
-       Weigh one servo and one wheel to close this out properly. -->
+       With the MEASURED wheel, CAD (base 1.5426 + 3 x 0.112 wheels + 0.164
+       camera) = 2.043 kg vs 2.088 on the scale: 2.2% light. The old 6.7% gap
+       was blamed on the servos' shape-only STEP; the wheels were most of it.
+       The rest may still be the servos - weigh one to close it out. -->
   <!-- ##################################################################
        SHELL MATERIAL - RESOLVED. Not magnetic, so aluminium. This also
        matched what the mass budget predicted independently (see below).
@@ -216,12 +224,15 @@
        ################################################################## -->
 
   <!-- base_link mass is SCALED so the four rigid bodies sum to the measured
-       2.088 kg. The CAD geometry gives 1.5426 kg; multiplying by 1.1336 gets
+       2.088 kg. The CAD geometry gives 1.5426 kg; multiplying by 1.0294 gets
        the total right while KEEPING the CAD's mass DISTRIBUTION, which is
        what the inertia tensor actually encodes. The inertia below is scaled
        by the same factor. This is why you do NOT need to weigh individual
-       parts: one total plus the CAD distribution is enough for PhysX. -->
-  <xacro:property name="base_mass"  value="1.74864"/>     <!-- = 2.088 - 3*wheel - camera -->
+       parts: one total plus the CAD distribution is enough for PhysX.
+       2026-09-27: factor was 1.1336 (base 1.74864) until the wheel was
+       weighed; the inertia below was rescaled by 1.588/1.74864 with it.
+       The 10.8 g shaft coupler (CAD) is counted here in base_link. -->
+  <xacro:property name="base_mass"  value="1.588"/>       <!-- = 2.088 - 3*wheel - camera -->
   <xacro:property name="base_com_z" value="0.05225"/>     <!-- 89.3 mm above the floor -->
 
   <!-- base_link inertia about its own COM, base_link axes.
@@ -229,14 +240,15 @@
        the chassis is not fore-aft symmetric. ixy and iyz are ~1e-18 and
        dropped. The old solid-cylinder placeholder overstated izz by 3.5x,
        which for a holonomic base is the term that dominates yaw response. -->
-  <xacro:property name="base_ixx" value="6.3734e-03"/>
-  <xacro:property name="base_iyy" value="6.9574e-03"/>
-  <xacro:property name="base_izz" value="8.2123e-03"/>
-  <xacro:property name="base_ixz" value="-1.968e-04"/>
+  <xacro:property name="base_ixx" value="5.7879e-03"/>
+  <xacro:property name="base_iyy" value="6.3183e-03"/>
+  <xacro:property name="base_izz" value="7.4579e-03"/>
+  <xacro:property name="base_ixz" value="-1.7872e-04"/>
 
-  <xacro:property name="wheel_ixx" value="3.7095e-05"/>   <!-- polar, spin axis -->
-  <xacro:property name="wheel_iyy" value="2.2594e-05"/>   <!-- transverse -->
-  <xacro:property name="wheel_izz" value="2.2594e-05"/>   <!-- transverse -->
+  <!-- CAD distribution, scaled by 112/58.45 to the measured wheel mass -->
+  <xacro:property name="wheel_ixx" value="7.1080e-05"/>   <!-- polar, spin axis -->
+  <xacro:property name="wheel_iyy" value="4.3294e-05"/>   <!-- transverse -->
+  <xacro:property name="wheel_izz" value="4.3294e-05"/>   <!-- transverse -->
 
   <material name="grey">  <color rgba="0.28 0.29 0.31 1.0"/></material>
   <material name="black"> <color rgba="0.10 0.10 0.12 1.0"/></material>
@@ -347,19 +359,43 @@
 
   <!-- We publish base_link -> camera_link ONLY; the Orbbec driver supplies
        the rest of the chain on /tf_static. The 164 g camera has no inertial
-       block, so its mass is carried implicitly by base_link. -->
+       block, so its mass is carried implicitly by base_link.
+
+       camera_link IS THE LEFT IR LENS, not the camera body centre.
+       The driver's /tf_static has camera_link -> camera_depth_frame as the
+       identity, and depth = the left IR camera; so camera_link must be where
+       the left IR lens physically is. Until 2026-09-27 this joint put
+       camera_link at the BODY centre (camera_x/y/z above), which placed every
+       depth point ~47.5 mm to the right of the truth.
+
+       MEASURED on the robot 2026-09-27: a bottle on the centre line at 0.5 m
+       and 1.0 m, read from depth. With the old joint it sat at -44.5 and
+       -38.9 mm (fit: -51.0 mm offset, +0.65 deg yaw - an offset, not a yaw);
+       with this joint at +3.0 and +8.6 mm, i.e. on the line to within
+       hand placement.
+
+       The lens position is DERIVED from the measured body centre: the lens
+       is 2.3 mm forward, 47.5 mm left and 0.55 mm up of the body centre in
+       the camera's own axes (Orbbec's geometry, via NVIDIA's Gemini 335L
+       asset: 95 mm baseline, lens 11.2 mm behind the cover glass), rotated
+       by the mount rpy below. The box is drawn back at the body centre. -->
+  <xacro:property name="camera_link_x" value="0.02399"/>
+  <xacro:property name="camera_link_y" value="0.04748"/>
+  <xacro:property name="camera_link_z" value="${0.17524 - wheel_radius}"/>
   <link name="camera_link">
     <visual>
+      <origin xyz="-0.0023 -0.0475 -0.00055" rpy="0 0 0"/>
       <geometry><box size="${camera_box_x} ${camera_box_y} ${camera_box_z}"/></geometry>
       <material name="teal"/>
     </visual>
     <collision>
+      <origin xyz="-0.0023 -0.0475 -0.00055" rpy="0 0 0"/>
       <geometry><box size="${camera_box_x} ${camera_box_y} ${camera_box_z}"/></geometry>
     </collision>
   </link>
   <joint name="camera_mount_joint" type="fixed">
     <parent link="base_link"/><child link="camera_link"/>
-    <origin xyz="${camera_x} ${camera_y} ${camera_z}"
+    <origin xyz="${camera_link_x} ${camera_link_y} ${camera_link_z}"
             rpy="${camera_roll} ${camera_pitch} 0"/>
   </joint>
 
