@@ -254,6 +254,9 @@ def generate_launch_description():
                 # frame, which means the driver holds the fast ones until the
                 # slow one is ready. Depth is the slow one, so the IR pair --
                 # the only input cuVSLAM uses -- was being buffered behind it.
+                # NOTE: until 2026-09-27 a stale 'enable_frame_sync': 'true'
+                # sat further down this dict, and a later key wins - so this
+                # 'false' never took effect and the IR pair DID wait for depth.
                 'enable_frame_sync': 'false',
                 'enable_left_ir': 'true',
                 'left_ir_width': '848',
@@ -279,7 +282,6 @@ def generate_launch_description():
                 # texture is a question about this room, not about theory, so
                 # it gets measured rather than argued.
                 'enable_laser': LaunchConfiguration('enable_laser'),
-                'enable_frame_sync': 'true',
                 'time_domain': LaunchConfiguration('time_domain'),
                 # Colour and depth are not used by this route. Leaving them off
                 # keeps USB bandwidth and GPU memory for SLAM, which matters on
