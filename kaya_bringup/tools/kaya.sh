@@ -12,7 +12,9 @@
 # place by that distance -- and it fails SILENTLY: the robot drives confidently
 # to the wrong room with a photo of the right one on the screen.
 set -u
-ROBOT=orin-nano@192.168.1.28
+# The robot to drive. Defaults to this project's robot; set KAYA_ROBOT for yours,
+# e.g. KAYA_ROBOT=me@192.168.1.50 ./kaya.sh
+ROBOT=${KAYA_ROBOT:-orin-nano@192.168.1.28}
 HERE=$(cd "$(dirname "$0")/../.." && pwd)
 DASH="$HERE/dashboard/kaya_dashboard.py"
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=20"
@@ -35,7 +37,7 @@ status)
 esac
 
 echo "=== 1/3  robot stack ==="
-timeout 60 $SSH "$ROBOT" 'echo ok' >/dev/null 2>&1 || { echo "cannot reach the robot at 192.168.1.28 -- is it powered and on wifi?"; exit 1; }
+timeout 60 $SSH "$ROBOT" 'echo ok' >/dev/null 2>&1 || { echo "cannot reach the robot at $ROBOT -- is it powered and on wifi?"; exit 1; }
 timeout 150 $SSH "$ROBOT" '~/kaya_drive.sh' 2>&1 | tail -2 || exit 1
 
 echo "=== 2/3  waiting for the map frame to anchor ==="

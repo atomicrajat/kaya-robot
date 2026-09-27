@@ -2,6 +2,9 @@
 
 ROS 2 Jazzy packages for the Kaya omni-wheel robot (Jetson Orin Nano 8GB, JetPack 7.2.1).
 
+**Building your own Kaya? Start with `GETTING_STARTED.md`**: flashed Jetson to
+a mapping, navigating robot, dashboard and simulator, in order.
+
 See `ROADMAP.md` for the plan and the next tests, and `ENVIRONMENT.md` for the
 development machine — the project moved from the MacBook to the Ubuntu
 workstation on 2026-09-08.
@@ -45,8 +48,3 @@ steel and by the robot's own servo magnets.
 
 Camera IMU timestamps are device-generated: inter-stamp jitter 0.004 ms vs
 inter-arrival jitter 4.694 ms. Suitable for VIO.
-
-## TODO before Phase 2
-
-Every dimension in `kaya_description/urdf/kaya.urdf.xacro` is a placeholder.
-Measure chassis radius, wheel radius, and the camera mount offset.
