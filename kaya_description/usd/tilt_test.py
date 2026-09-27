@@ -33,6 +33,8 @@ parser.add_argument("--yaw", type=float, nargs="*", default=[0.0, 30.0, 60.0],
 parser.add_argument("--rate", type=float, default=1.0, help="tilt rate, deg/s")
 parser.add_argument("--start", type=float, default=5.0, help="first tilt, deg")
 parser.add_argument("--end", type=float, default=35.0, help="give up at, deg")
+parser.add_argument("--device", choices=["cpu", "cuda"], default="cpu",
+                    help="physics on CPU (one robot: fastest) or GPU (what training uses)")
 args, _ = parser.parse_known_args()
 
 from isaacsim import SimulationApp  # noqa: E402
@@ -40,17 +42,16 @@ from isaacsim import SimulationApp  # noqa: E402
 simulation_app = SimulationApp({"headless": True})
 
 import isaacsim.core.experimental.utils.app as app_utils  # noqa: E402
-import isaacsim.core.experimental.utils.stage as stage_utils  # noqa: E402
 import numpy as np  # noqa: E402
 import omni.timeline  # noqa: E402
-from isaacsim.core.experimental.objects import GroundPlane  # noqa: E402
 from isaacsim.core.experimental.prims import Articulation  # noqa: E402
 from isaacsim.core.simulation_manager import SimulationManager  # noqa: E402
-from pxr import Gf, UsdGeom, UsdPhysics, UsdShade  # noqa: E402
+from pxr import UsdGeom  # noqa: E402
 
 import sys  # noqa: E402
 
 sys.path.insert(0, str(HERE))
+import kaya_isaac as kaya  # noqa: E402
 from kaya_servos import WheelServos  # noqa: E402
 
 G = 9.81
@@ -60,30 +61,13 @@ SLIDE_MM = 5.0          # displacement that counts as "it slid"
 
 
 def main():
-    stage_utils.create_new_stage()
-    stage = stage_utils.get_current_stage()
-    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
-    UsdGeom.SetStageMetersPerUnit(stage, 1.0)
-    GroundPlane("/World/ground", sizes=20.0)
+    stage = kaya.new_stage()
     # A grippy floor, so the roller material (combine mode "min") is what
     # sets the coefficient - the test is calibrating the roller/table pair.
-    floor = UsdShade.Material.Define(stage, "/World/PhysicsMaterials/table")
-    fm = UsdPhysics.MaterialAPI.Apply(floor.GetPrim())
-    fm.CreateStaticFrictionAttr(1.0)
-    fm.CreateDynamicFrictionAttr(1.0)
-    for prim in stage.GetPrimAtPath("/World/ground").GetAllChildren():
-        if prim.HasAPI(UsdPhysics.CollisionAPI):
-            UsdShade.MaterialBindingAPI.Apply(prim).Bind(
-                floor, UsdShade.Tokens.weakerThanDescendants, "physics")
-
-    stage_utils.add_reference_to_stage(usd_path=args.usd, path=ROBOT)
-    xf = UsdGeom.Xformable(stage.GetPrimAtPath(ROBOT))
-    xf.ClearXformOpOrder()
-    t_op = xf.AddTranslateOp()
-    r_op = xf.AddRotateZOp()
-    t_op.Set(Gf.Vec3d(0, 0, 0.002))
-
-    SimulationManager.setup_simulation(dt=1.0 / 240.0, device="cpu")
+    kaya.add_floor(stage, mu=(1.0, 1.0), size=20.0)
+    robot_prim = kaya.add_kaya(stage, ROBOT, usd=args.usd)
+    r_op = UsdGeom.Xformable(robot_prim).GetOrderedXformOps()[1]      # the rotateZ op
+    kaya.setup_physics(device=args.device)
     scene = SimulationManager.get_physics_scenes()[0]
     app_utils.update_app(steps=2)
     robot = Articulation(ROBOT)

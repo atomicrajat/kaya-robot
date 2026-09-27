@@ -16,6 +16,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--data", default=str(HERE / "data" / "real_step_2026-09-27.json"))
 ap.add_argument("--ideal", action="store_true", help="instant servos, for comparison")
 ap.add_argument("--plot", default=str(HERE / "test_output" / "step_compare.png"))
+ap.add_argument("--device", choices=["cpu", "cuda"], default="cpu",
+                    help="physics on CPU (one robot: fastest) or GPU (what training uses)")
 args, _ = ap.parse_known_args()
 
 from isaacsim import SimulationApp  # noqa: E402
@@ -23,13 +25,10 @@ app = SimulationApp({"headless": True})
 
 import numpy as np  # noqa: E402
 import isaacsim.core.experimental.utils.app as app_utils  # noqa: E402
-import isaacsim.core.experimental.utils.stage as stage_utils  # noqa: E402
-from isaacsim.core.experimental.objects import GroundPlane  # noqa: E402
 from isaacsim.core.experimental.prims import Articulation  # noqa: E402
 from isaacsim.core.simulation_manager import SimulationManager  # noqa: E402
-from pxr import Gf, UsdGeom, UsdPhysics, UsdShade  # noqa: E402
-
 sys.path.insert(0, str(HERE))
+import kaya_isaac as kaya  # noqa: E402
 from kaya_servos import WheelServos, wheel_speeds  # noqa: E402
 
 D = json.load(open(args.data))
@@ -37,17 +36,10 @@ cmd = np.array(D["cmd"]); t0 = cmd[0, 0]; ct, cv = cmd[:, 0] - t0, cmd[:, 1]
 jt = np.array([r[0] for r in D["js"]]) - t0; jv = np.array([r[2] for r in D["js"]])
 od = np.array(D["odom"]); real_fwd = od[:, 1].max() - od[0, 1]
 
-stage_utils.create_new_stage(); st = stage_utils.get_current_stage()
-UsdGeom.SetStageUpAxis(st, "Z"); UsdGeom.SetStageMetersPerUnit(st, 1.0)
-GroundPlane("/World/ground", sizes=20.0)
-tile = UsdShade.Material.Define(st, "/World/PhysicsMaterials/tile")          # as kaya_sim.py
-api = UsdPhysics.MaterialAPI.Apply(tile.GetPrim()); api.CreateStaticFrictionAttr(0.39); api.CreateDynamicFrictionAttr(0.31)
-for p in st.GetPrimAtPath("/World/ground").GetAllChildren():
-    if p.HasAPI(UsdPhysics.CollisionAPI):
-        UsdShade.MaterialBindingAPI.Apply(p).Bind(tile, UsdShade.Tokens.weakerThanDescendants, "physics")
-stage_utils.add_reference_to_stage(usd_path=str(HERE / "kaya.usda"), path="/World/kaya")
-UsdGeom.Xformable(st.GetPrimAtPath("/World/kaya")).AddTranslateOp().Set(Gf.Vec3d(0, 0, 0.002))
-SimulationManager.setup_simulation(dt=1.0 / 240.0, device="cpu")
+st = kaya.new_stage()
+kaya.add_floor(st, size=20.0)                 # the tile, as in kaya_sim.py
+kaya.add_kaya(st, "/World/kaya")
+kaya.setup_physics(device=args.device)
 app_utils.update_app(steps=2); robot = Articulation("/World/kaya"); app_utils.play(); app_utils.update_app(steps=3)
 for _ in range(60): app.update()                                    # settle
 servos = WheelServos(robot, ideal=args.ideal)
@@ -68,7 +60,9 @@ def metrics(t, w, tgt, on, off):
         return t[m][0] - after if m.any() else float("nan")
     ss = w[(t > on + 1.0) & (t < off)]
     return (first(w >= 0.1 * tgt, on), first(w >= 0.9 * tgt, on),
-            w[(t > on) & (t < off)].max() / tgt - 1, ss.mean() / tgt, first(w <= 0.1 * tgt, off))
+            # overshoot of the STEP: the first 0.4 s only, not a roller
+            # hand-over spike somewhere in the cruise
+            w[(t > on) & (t < on + 0.4)].max() / tgt - 1, ss.mean() / tgt, first(w <= 0.1 * tgt, off))
 
 tgt = wheel_speeds(0.1, 0, 0)[0]
 on = ct[np.argmax(cv > 0)]; off = ct[np.argmax((cv == 0) & (ct > on))]

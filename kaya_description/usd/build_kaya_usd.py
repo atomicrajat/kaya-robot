@@ -138,12 +138,17 @@ ROLLER_DAMPING = 1e-5 * math.pi / 180       # N.m.s/deg (USD angular units)
 
 # Roller friction, calibrated 2026-09-27 from the real robot's tilt test: on a
 # table, CAMERA FACING DOWNHILL, it slides at 15 deg. The same test in the sim
-# (tilt_test.py --yaw 0): mu 0.30 -> 11.3 deg, 0.39 -> 15.07, 0.40 -> 15.5;
-# slide onset is noisy by ~0.5 deg, i.e. mu +-0.015. NOT tan(15) = 0.27: the
-# rollers turn freely sideways, so the robot slides at a shallower angle than
-# a block with the same coefficient would. Dynamic = 0.8 x static is an
-# assumption (only the onset of sliding was measured).
-ROLLER_MU_STATIC = 0.39
+# (tilt_test.py --yaw 0), on the finished asset, both physics devices:
+#   mu     0.39   0.40   0.41   0.42   0.43
+#   CPU   14.18  14.63  14.85  15.33  15.70 deg
+#   GPU   14.73  15.55  15.97  16.03  16.87 deg
+# The GPU solver consistently holds ~0.9 deg longer. 0.40 puts both within
+# 0.6 deg of 15 - inside the test's own run-to-run noise (~0.5 deg) and the
+# real reading - rather than tuning the robot to one device.
+# NOT tan(15) = 0.27: the rollers turn freely sideways, so the robot slides at
+# a shallower angle than a block with the same coefficient would. Dynamic =
+# 0.8 x static is an assumption (only the onset of sliding was measured).
+ROLLER_MU_STATIC = 0.40
 ROLLER_FRICTION = (ROLLER_MU_STATIC, 0.8 * ROLLER_MU_STATIC)
 # "min": the measured pair (roller on a hard table) governs on any floor at
 # least as grippy; a slipperier floor still wins. PhysX's default "average"

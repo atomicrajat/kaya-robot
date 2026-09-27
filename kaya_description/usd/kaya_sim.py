@@ -30,6 +30,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--test", action="store_true", help="headless verification run")
 parser.add_argument("--usd", default=str(HERE / "kaya.usda"))
 parser.add_argument("--out", default=str(HERE / "test_output"))
+parser.add_argument("--device", choices=["cpu", "cuda"], default="cpu",
+                    help="physics on CPU (one robot: fastest) or GPU (what training uses)")
 args, _ = parser.parse_known_args()
 
 from isaacsim import SimulationApp  # noqa: E402  (must start before any omni import)
@@ -41,45 +43,28 @@ import isaacsim.core.experimental.utils.app as app_utils  # noqa: E402
 import isaacsim.core.experimental.utils.stage as stage_utils  # noqa: E402
 import numpy as np  # noqa: E402
 import omni.timeline  # noqa: E402
-from isaacsim.core.experimental.objects import GroundPlane  # noqa: E402
-from isaacsim.core.experimental.prims import Articulation  # noqa: E402
 from isaacsim.core.simulation_manager import SimulationManager  # noqa: E402
-from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdPhysics, UsdShade  # noqa: E402
+from pxr import Gf, UsdGeom, UsdLux, UsdPhysics  # noqa: E402
 
 sys.path.insert(0, str(HERE))
-from kaya_servos import WheelServos, wheel_speeds  # noqa: E402
+import kaya_isaac as kaya  # noqa: E402
+from kaya_isaac import yaw_of  # noqa: E402
+from kaya_servos import wheel_speeds  # noqa: E402
 
 ROBOT = "/World/kaya"
+SENSORS = kaya.cameras(ROBOT)
 CAM = f"{ROBOT}/base_link/camera_link/gemini_335L"
-RGB_CAM = f"{CAM}/camera_rgb/Camera_rgb"
-IMU_PATH = f"{ROBOT}/base_link/camera_link/camera_depth_frame/imu"
+RGB_CAM, DEPTH_CAM = SENSORS["rgb"], SENSORS["depth"]
 # The real Gemini IMU at rest on the robot, /camera/gyro_accel/sample, m/s^2,
 # optical frame (~/bags/phase1_imu on the robot): the source of the 4.89 deg.
 REAL_IMU_AT_REST = (-0.1611, -9.7531, 0.8337)
-DEPTH_CAM = f"{CAM}/camera_ir_left/Camera_Depth_Left"
 
 WALL_X = 1.5        # front face of the test wall, m, in the robot's start frame
 
 
 def build_world(stage):
-    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
-    UsdGeom.SetStageMetersPerUnit(stage, 1.0)
-    UsdGeom.Xform.Define(stage, "/World")
-
-    # Floor: shiny tile, the real home floor. Not tilt-tested; the owner judges
-    # it no grippier than the table the rollers were calibrated on, so it is
-    # set AT that upper bound. The rollers combine with "min", so lowering
-    # this is how to model a slipperier floor (or randomise it for training).
-    GroundPlane("/World/ground", sizes=40.0, templates="wireframe-blue")
-    floor_mat = UsdShade.Material.Define(stage, "/World/PhysicsMaterials/tile")
-    api = UsdPhysics.MaterialAPI.Apply(floor_mat.GetPrim())
-    api.CreateStaticFrictionAttr(0.39)
-    api.CreateDynamicFrictionAttr(0.31)
-    api.CreateRestitutionAttr(0.0)
-    for prim in stage.GetPrimAtPath("/World/ground").GetAllChildren():
-        if prim.HasAPI(UsdPhysics.CollisionAPI):
-            UsdShade.MaterialBindingAPI.Apply(prim).Bind(
-                floor_mat, UsdShade.Tokens.weakerThanDescendants, "physics")
+    # Floor: shiny tile, the real home floor - see kaya_isaac.add_floor.
+    kaya.add_floor(stage)
 
     # Lighting: a dome for soft fill everywhere + one sun for shadows/shape.
     dome = UsdLux.DomeLight.Define(stage, "/World/Lights/dome")
@@ -105,10 +90,7 @@ def build_world(stage):
     box("/World/props/box_green", (1.1, -0.6, 0.25), (0.3, 0.3, 0.5), (0.2, 0.6, 0.25))
     box("/World/props/box_blue", (-0.9, 0.8, 0.1), (0.2, 0.2, 0.2), (0.15, 0.3, 0.8))
 
-    # The robot. Its root is base_footprint (floor level), so z = 0 is "on
-    # the floor"; 5 mm up avoids an initial contact impulse.
-    stage_utils.add_reference_to_stage(usd_path=args.usd, path=ROBOT)
-    UsdGeom.Xformable(stage.GetPrimAtPath(ROBOT)).AddTranslateOp().Set(Gf.Vec3d(0, 0, 0.005))
+    kaya.add_kaya(stage, ROBOT, position=(0, 0, 0.005), usd=args.usd)
 
     chase = UsdGeom.Camera.Define(stage, "/World/chase_cam")
     chase.CreateFocalLengthAttr(18.0)
@@ -155,12 +137,8 @@ class Teleop:
         return True
 
 
-def yaw_of(q):
-    w, x, y, z = q
-    return math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
-
-
-def run_test(robot, servos, imu):
+def run_test(driver):
+    robot, servos = driver.robot, driver.servos
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     timeline = omni.timeline.get_timeline_interface()
@@ -200,6 +178,10 @@ def run_test(robot, servos, imu):
                    f"{sorted(set(round(d, 6) for d in steps))}, sim time +{sim_time() - t_sim:.3f} s, "
                    f"timeline +{timeline.get_current_time() - t_tl:.3f} s")
 
+    scene0 = SimulationManager.get_physics_scenes()[0]
+    results.append(f"      physics device {SimulationManager.get_physics_sim_device()}, "
+                   f"GPU dynamics {scene0.get_enabled_gpu_dynamics()}")
+
     # 1. what PhysX actually loaded
     masses = robot.get_link_masses().numpy()[0]
     check("mass (PhysX, all links)", abs(masses.sum() - 2.088) < 0.002,
@@ -215,8 +197,7 @@ def run_test(robot, servos, imu):
     acc = []
     for _ in range(30):
         simulation_app.update()
-        r = imu.get_sensor_reading()
-        acc.append([r.linear_acceleration_x, r.linear_acceleration_y, r.linear_acceleration_z])
+        acc.append(driver.read_imu(noisy=False)[0])
     acc = np.mean(acc, axis=0)
     diff = np.abs(acc - REAL_IMU_AT_REST).max()
     check("IMU at rest vs the real Gemini IMU", diff < 0.05,
@@ -346,51 +327,29 @@ def run_test(robot, servos, imu):
 
 
 def main():
-    stage_utils.create_new_stage()
-    stage = stage_utils.get_current_stage()
+    stage = kaya.new_stage()
     build_world(stage)
-
-    # 240 Hz physics: the rollers are 12 mm across and weigh 2 g; at 60 Hz
-    # they chatter against the floor.
-    SimulationManager.setup_simulation(dt=1.0 / 240.0, device="cpu")
+    kaya.setup_physics(device=args.device)       # 240 Hz - see kaya_isaac
     app_utils.update_app(steps=2)
-    robot = Articulation(ROBOT)
     if not args.test:
         setup_gui_views()
     app_utils.play()
     app_utils.update_app(steps=3)
-    timeline = omni.timeline.get_timeline_interface()
-    servos = WheelServos(robot)
-    print(f"[kaya] articulation: {robot.num_dofs} dofs, wheels at dof {servos.idx.tolist()}")
+    driver = kaya.KayaDriver(ROBOT)
+    print(f"[kaya] articulation: {driver.robot.num_dofs} dofs, "
+          f"wheels at dof {driver.servos.idx.tolist()}", flush=True)
 
     if args.test:
-        from isaacsim.sensors.experimental.physics import IMUSensor
-        imu = IMUSensor(IMU_PATH)
-        ok = run_test(robot, servos, imu)
+        ok = run_test(driver)
         app_utils.stop()
         simulation_app.close()
         raise SystemExit(0 if ok else 1)
 
     teleop = Teleop()
-    print("[kaya] ready - click the viewport, then W/S/A/D/Q/E to drive, SPACE to stop")
-    # Stop -> Play, or "Fetch" on a changed USD, rebuilds physics and kills the
-    # old handles; re-attach instead of crashing (the GUI used to close here).
-    was_playing = True
+    print("[kaya] ready - click the viewport, then W/S/A/D/Q/E to drive, SPACE to stop", flush=True)
     while simulation_app.is_running():
-        playing = app_utils.is_playing()
-        if playing and (servos is None or servos.broken or not was_playing):
-            try:
-                if servos is not None:
-                    servos.close()
-                robot = Articulation(ROBOT)
-                servos = WheelServos(robot)
-                print("[kaya] (re)attached to the robot", flush=True)
-            except Exception as exc:     # physics not ready yet: next frame
-                servos = None
-                carb.log_warn(f"[kaya] waiting for physics: {exc}")
-        if playing and servos is not None:
-            servos.drive(*teleop.cmd)
-        was_playing = playing
+        driver.drive(*teleop.cmd)
+        driver.update()           # also re-attaches after Stop/Play or a USD "Fetch"
         simulation_app.update()
     simulation_app.close()
 

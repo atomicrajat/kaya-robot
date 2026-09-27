@@ -27,9 +27,9 @@ over "kaya" (
             prepend apiSchemas = ["PhysicsMaterialAPI", "PhysxMaterialAPI"]
         )
         {
-            float physics:dynamicFriction = 0.312
+            float physics:dynamicFriction = 0.32
             float physics:restitution = 0
-            float physics:staticFriction = 0.39
+            float physics:staticFriction = 0.4
             custom token physxMaterial:frictionCombineMode = "min"
         }
 
