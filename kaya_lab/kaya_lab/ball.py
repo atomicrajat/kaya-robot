@@ -52,6 +52,27 @@ BALL_CFG = RigidObjectCfg(
 )
 
 
+# The real ball, measured 2026-09-28 (a child's size-1 PVC football, soft): 1.7 kg on a board
+# flattened it 14.0 -> 12.5 cm, 7.5 mm at each of the two contacts, so 16.7 N / 7.5 mm =
+# 2,200 N/m per contact (an air ball is close to a linear spring: its flat patch grows with
+# the squash). It would not slide on cardboard at all - it always rolled - so its grip is
+# high; mu ~1.0. PhysX averages the two materials' friction by default (0.8 ball, 0.5
+# cardboard -> 0.65), so the measured ball takes the MAX instead: 1.0 against anything.
+BALL_SQUASH_K = 2200.0          # [N/m] per contact
+BALL_MEASURED_FRICTION = (1.0, 0.9)
+
+
+def ball_cfg_measured(k=BALL_SQUASH_K, mu=BALL_MEASURED_FRICTION) -> RigidObjectCfg:
+    """BALL_CFG with the measured squash (compliant contact, critically damped) and grip."""
+    from isaaclab_physx.sim.spawners.materials.physics_materials_cfg import PhysxRigidBodyMaterialCfg
+
+    mat = PhysxRigidBodyMaterialCfg(static_friction=mu[0], dynamic_friction=mu[1], restitution=BALL_RESTITUTION,
+                                    friction_combine_mode="max",
+                                    compliant_contact_stiffness=k,
+                                    compliant_contact_damping=2.0 * (k * BALL_MASS) ** 0.5)
+    return BALL_CFG.replace(spawn=BALL_CFG.spawn.replace(physics_material=mat))
+
+
 def set_hollow_inertia(stage, ball_prim_path: str):
     """Override the solid-sphere inertia PhysX would compute from the mass."""
     from pxr import Gf, UsdPhysics

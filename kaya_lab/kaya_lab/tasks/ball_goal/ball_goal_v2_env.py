@@ -132,7 +132,8 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
         from kaya_lab.ball import CARDBOARD_T as T
         panel_y = torch.where(left, hw + T + BALL_RADIUS + 0.01, -(hw + T + BALL_RADIUS + 0.01))
         panel_y = torch.maximum(torch.minimum(panel_y, r[:, 2] - gap), r[:, 1] + gap)
-        panel_x = cfg.goal_line_x + 0.05 + 0.2 * torch.rand(n, device=dev)
+        px0, px1 = cfg.side_panel_x
+        panel_x = cfg.goal_line_x + px0 + (px1 - px0) * torch.rand(n, device=dev)
         nbx = torch.where(kind == 4, panel_x, nbx)
         nby = torch.where(kind == 4, panel_y, nby)
         return torch.where(pick, nbx, bx), torch.where(pick, nby, by)

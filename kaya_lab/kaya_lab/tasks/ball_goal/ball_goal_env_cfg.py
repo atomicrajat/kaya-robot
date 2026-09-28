@@ -155,6 +155,7 @@ class KayaBallGoalV2EnvCfg(KayaBallGoalDetEnvCfg):
     rew_jam = 0.0                         # per step pushing a ball that is jammed against something
     jam_ball_speed = 0.03                 # [m/s] "not moving"
     side_panel_frac = 0.0                 # of wall starts: ball against the OUTSIDE of a box side panel
+    side_panel_x = (0.05, 0.25)           # [m] behind the mouth; ~0.23 = in the corner with the goal wall
     rew_center_push = 0.0                 # per step pushing a CENTRED ball that is right next to a surface
     center_push_half_y = 0.03             # [m] "centred in the pocket"
     center_push_clear = 0.05              # [m] ball surface to wall / obstacle / box panel
