@@ -43,6 +43,7 @@ from numpy_policy import NumpyPolicy
 MAX_LIN, MAX_ANG = 0.15, 1.0          # drive node limits; the policy was trained on these
 AGE_CAP_S = 5.0                       # as in training
 STALL_MAX_TURN = 0.5                  # [rad/s] impacts are not trusted while turning faster
+ROBOT_IN_BOX_M = 0.12                 # robot centre this far past the mouth line = in the box
 COLOUR_TRUST_S = 5.0                  # a colour-only ball detection needs YOLO within this long
 BOX_FRESH_S = 10.0                    # a goal only counts within this long of a marker sighting
 FUSE_JUMP_M = 0.05                    # per 0.1 s step: 0.5 m/s of disagreement = a visual jump
@@ -659,9 +660,11 @@ class BallPolicyNode(Node):
         # box estimate carried by wheel odometry through 16 s of pinned wheel-spin (video: the
         # ball was 50 cm right of the box)
         box_fresh = self.goal_source != "marker" or time.time() - self.goal_seen_t < BOX_FRESH_S
-        # ... and with the robot itself still outside: pushing the ball in, its centre stays behind
-        # the mouth line (the ball is ahead of it); run 26 "scored" with the ROBOT inside the box
-        robot_out = (rot(-gdir) @ (p - g_w))[0] < 0.0
+        # ... and with the robot itself not IN the box: run 26 "scored" with the robot inside it.
+        # Pushing the ball deep, the robot's centre does enter the mouth a little (run 32: ~9 cm,
+        # the real goal went uncalled at 0.0 and the robot kept pushing), so allow 12 cm; fully
+        # inside, its centre is >= 15 cm in (half its width).
+        robot_out = (rot(-gdir) @ (p - g_w))[0] < ROBOT_IN_BOX_M
         scored = (self.inside_n >= 3 and time.time() - self.inside_t0 >= 0.5 and self.seen_in_front
                   and box_fresh and robot_out)
         left = p_s[0] < -self.arena[0] or abs(p_s[1]) > self.arena[1] or p_s[0] > self.goal_xy[0] + 0.5
