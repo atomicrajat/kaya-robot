@@ -616,7 +616,25 @@ cm in front of the mouth, and a penalty for the ball against a panel's outside.
 - the IMU queue keeps every sample (depth 1 lost ~65 deg in a spin, run 32);
 - "ball beyond the goal wall" is judged in the box frame (run 33).
 
-**Open:** does v2.4 stop going for the goal from the side? Sim comparison
+**v2.4 on the real robot (2026-09-29 ~02:15, fine-tuned from v2.3, `kaya_ball_v2/2026-09-29_00-25-07_v24/model_1097.pt`, `~/b5/node/policy_v24.npz`): 3 goals in 4.**
+
+    run  start                              result
+    35   beside the box, right              SCORED 49.7 s - pinned at the panel's corner, backed off, came round the front
+    36   behind the robot, left             SCORED 42.0 s - brought the ball across the mouth before going in
+    37   corner: right panel + back wall    SCORED 73.7 s - got it out of the corner
+    38   beside the box, left               no - wheels snagged on the side panels while turning (the user)
+
+Sim (v2.4 conditions, 512 episodes): beside the box v2.3 80.7% / 19.3 s ->
+v2.4 89.1% / 11.5 s; corner 80.1% / 22.3 s -> 83.4% / 14.6 s.
+
+**Next (v2.5, written and smoke-tested, NOT trained - the user chose to stop
+here):** the bump penalty never counted the goal's side panels, and in sim the
+rollers slide off rigid cardboard, so rubbing a panel was free; the real wheels
+snag on it. `Kaya-BallGoal-V25-v0`: panels count as bumps, and -0.05/step for
+the robot's centre > 5 cm into the goal (runs 24, 26). Fine-tune from v2.4
+model_1097, ~300 iterations (~95 min).
+
+**Earlier open question (answered: yes, mostly):** does v2.4 stop going for the goal from the side? Sim comparison
 (`scripts/v2_corner_eval.py --cfg v24`, side and corner starts) then the same
 filmed starts on the robot. Also: a small penalty for the robot inside the
 empty goal (run 24).

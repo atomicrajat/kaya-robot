@@ -6,7 +6,8 @@ from isaaclab.utils.configclass import configclass
 
 from .ball_goal_env_cfg import (KayaBallGoalDetEnvCfg, KayaBallGoalEnvCfg, KayaBallGoalV2EnvCfg,  # noqa: F401
                                 KayaBallGoalV21EnvCfg, KayaBallGoalV22EnvCfg,
-                                KayaBallGoalV23EnvCfg, KayaBallGoalV24EnvCfg)
+                                KayaBallGoalV23EnvCfg, KayaBallGoalV24EnvCfg,
+                                KayaBallGoalV25EnvCfg)
 
 
 @configclass
@@ -36,6 +37,9 @@ def register():
          "ball_goal_v2_env:KayaBallGoalV2Env"),
         # v2.4: measured ball, blind close-range depth, starts beside the box, post penalty
         ("Kaya-BallGoal-V24-v0", "KayaBallGoalV24EnvCfg", "KayaBallGoalV2PPORunnerCfg",
+         "ball_goal_v2_env:KayaBallGoalV2Env"),
+        # v2.5: the goal's side panels count as bumps; a penalty for the robot inside the goal
+        ("Kaya-BallGoal-V25-v0", "KayaBallGoalV25EnvCfg", "KayaBallGoalV2PPORunnerCfg",
          "ball_goal_v2_env:KayaBallGoalV2Env"),
     ]:
         if task_id in gym.registry:

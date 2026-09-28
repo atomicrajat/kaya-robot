@@ -66,7 +66,7 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
         self._room, self._obs_xy, self._obs_on = self._room.to(dev), self._obs_xy.to(dev), self._obs_on.to(dev)
         self._room[:, 0], self._room[:, 1], self._room[:, 2] = -2.0, -1.5, 1.5
         self._room[:, 3] = cfg.goal_line_x + GOAL_DEPTH + CARDBOARD_T
-        for k in ("ball_speed", "bump", "jam", "center_push", "kick", "post"):
+        for k in ("ball_speed", "bump", "jam", "center_push", "kick", "post", "robot_in_goal"):
             self._sums[k] = torch.zeros(self.num_envs, device=dev)
         self._jam_run = torch.zeros(self.num_envs, device=dev)          # consecutive jammed steps
         self._since_jam = torch.full((self.num_envs,), 99.0, device=dev)  # steps since the last jam
@@ -260,6 +260,16 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
             ey = ((p[:, 1] - self._obs_xy[:, k, 1]).abs() - h).clamp(min=0)
             dk = torch.where(self._obs_on[:, k], torch.hypot(ex, ey), torch.full_like(ex, 9.0))
             d = torch.minimum(d, dk)
+        if self.cfg.bump_goal_panels:
+            # the goal's side panels too (v2.5): in sim the rollers slide off rigid cardboard, so
+            # rubbing a panel cost nothing; the real wheels snag on it (run 38, the user: "while
+            # turning the wheels get stuck in the goal side walls")
+            hw, T = self._half_w, CARDBOARD_T
+            for sgn in (1.0, -1.0):
+                cy = sgn * (hw + T / 2)
+                ex = ((p[:, 0] - (self.cfg.goal_line_x + GOAL_DEPTH / 2)).abs() - GOAL_DEPTH / 2).clamp(min=0)
+                ey = ((p[:, 1] - cy).abs() - T / 2).clamp(min=0)
+                d = torch.minimum(d, torch.hypot(ex, ey))
         return d - ROBOT_R
 
     def _ball_clearance(self):
@@ -323,6 +333,7 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
             "center_push": cfg.rew_center_push * center_push.float(),
             "kick": cfg.rew_kick * kick.float(),
             "post": cfg.rew_post * on_post.float(),
+            "robot_in_goal": cfg.rew_robot_in_goal * (self._robot_env()[:, 0] > cfg.goal_line_x + 0.05).float(),
         }
         for k, x in extra.items():
             self._sums[k] += x

@@ -160,6 +160,8 @@ class KayaBallGoalV2EnvCfg(KayaBallGoalDetEnvCfg):
     depth_blind = 0.0                     # [m] sensed surfaces closer than this read as nothing
     rew_post = 0.0                        # per step with the ball against the outside of a side panel
     post_dist = 0.02                      # [m] ball surface to the panel's outer face
+    bump_goal_panels = False              # the bump penalty also counts the goal's side panels
+    rew_robot_in_goal = 0.0               # per step with the robot's centre past the goal line
     rew_center_push = 0.0                 # per step pushing a CENTRED ball that is right next to a surface
     center_push_half_y = 0.03             # [m] "centred in the pocket"
     center_push_clear = 0.05              # [m] ball surface to wall / obstacle / box panel
@@ -231,3 +233,15 @@ class KayaBallGoalV24EnvCfg(KayaBallGoalV23EnvCfg):
         super().__post_init__()
         from kaya_lab.ball import ball_cfg_measured
         self.ball = ball_cfg_measured().replace(prim_path=self.ball.prim_path)
+
+
+@configclass
+class KayaBallGoalV25EnvCfg(KayaBallGoalV24EnvCfg):
+    """v2.5, after runs 35-38 (v2.4: 3 goals in 4 on the real robot). The time it lost was the
+    wheels snagging on the goal's side panels while turning (the user, run 38). In sim the
+    bump penalty never counted the panels and the rollers slide off rigid cardboard, so
+    rubbing along a panel was free. Now it costs the same as touching a wall; and the robot
+    driving into the goal itself (runs 24, 26) costs a little every step it is in there."""
+
+    bump_goal_panels = True
+    rew_robot_in_goal = -0.05
