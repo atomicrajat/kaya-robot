@@ -522,7 +522,13 @@ class BallPolicyNode(Node):
         b_s = rot(-syaw) @ (ball_w - sp)                   # in the start frame
         # a ball behind the start is real (run 29: YOLO saw it 1.3 m behind, the check threw it
         # away 69 times and the robot spun for 90 s), so behind, allow the arena + 1 m
-        if b_s[0] < -self.arena[0] - 1.0 or b_s[0] > self.goal_xy[0] + 0.4 or abs(b_s[1]) > self.arena[1] + 0.5:
+        # past the goal wall: judged from the BOX when the markers have placed it (run 33: the start-
+        # frame limit, 60 cm off after drift, rejected the real ball beside the box 124 times)
+        if self.goal_w is not None:
+            beyond = (rot(-self.goal_w[1]) @ (ball_w - self.goal_w[0]))[0] > 0.30 + 0.15
+        else:
+            beyond = b_s[0] > self.goal_xy[0] + 0.4
+        if b_s[0] < -self.arena[0] - 1.0 or beyond or abs(b_s[1]) > self.arena[1] + 0.5:
             return True, self._reject("outside", img, d, b_s)
         # Colour-only detections ("round", "near") need YOLO's backing: run 28 chased yellow-brown
         # cardboard blobs for 27 s while the ball sat behind the robot - YOLO confirmed none of
