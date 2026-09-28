@@ -35,7 +35,7 @@ from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, Image, Imu
 
 from ball_detector import BallDetector
 from numpy_policy import NumpyPolicy
@@ -85,6 +85,18 @@ class BallPolicyNode(Node):
         global MAX_LIN
         MAX_LIN = P("max_lin_vel", MAX_LIN).value
         self.image_topic = P("image_topic", "/camera/color/image_raw").value
+        # where the goal box is: "mark" = measured from the start mark (goal_x/goal_y/goal_yaw_deg),
+        # "marker" = read off the ArUco markers on the box (goal_marker.py), carried by odometry
+        # between sightings and falling back to the mark until the first sighting
+        self.goal_source = P("goal_source", "mark").value
+        self.marker_size = P("marker_size", 0.146).value           # measured print: 146 mm
+        self.markers = None
+        self.goal_w = None                                          # (xy, into-box yaw) in odom
+        self.goal_seen_t = 0.0
+        self.n_marker = 0
+        self.last_marker_ids, self.marker_counts = [], {}
+        self.goal_yaw_w = None                                      # trusted, from ID 0 only
+        self.marker_rejected = 0
         # phantom rejection (first live run, 2026-09-28: yellow/orange things 4-5 m to the
         # side were taken for the ball for ~15 s). A detection must be round (sphere-fit
         # residual) and inside the play area. Run 2 set the threshold: the real ball close
@@ -113,6 +125,12 @@ class BallPolicyNode(Node):
         odom_topic = "/odom" if wheel else "/visual_slam/tracking/odometry"
         self.create_subscription(Odometry, odom_topic, self.on_odom, 10 if wheel else best_effort)
         self.fused, self.fused_hist, self.n_fuse = None, [], {"vslam": 0, "wheel": 0}
+        # gyro yaw (the camera's IMU): turning is where the wheels drift most, and the gyro
+        # measures it directly and never jumps. Bias from the first second standing still.
+        self.use_gyro = self.odom_source == "fused" and P("gyro_yaw", True).value
+        self.R_base_imu, self.gyro_yaw, self.gyro_t, self.gyro_bias, self.gyro_cal = None, 0.0, None, None, []
+        if self.use_gyro:
+            self.create_subscription(Imu, "/camera/gyro_accel/sample", self.on_imu, best_effort)
         self.vio_z0, self.vio_dead = None, False
         # v2 policies also get a 16-ray depth scan (depth_scan.py); needs the depth stream on
         self.use_scan = P("use_scan", False).value
@@ -185,6 +203,25 @@ class BallPolicyNode(Node):
         self.last_scan = self.scanner.scan(d)
         return self.last_scan
 
+    def on_imu(self, msg):
+        if self.R_base_imu is None:
+            try:
+                self.R_base_imu = tf_matrix(self.tf.lookup_transform("base_link", msg.header.frame_id, Time()))[:3, :3]
+            except tf2_ros.TransformException:
+                return
+        w = self.R_base_imu @ np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
+        t = Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
+        if self.gyro_bias is None:                      # still at the start: learn the bias
+            self.gyro_cal.append(w[2])
+            if len(self.gyro_cal) >= 150:
+                self.gyro_bias = float(np.mean(self.gyro_cal))
+                self.get_logger().info(f"gyro bias {math.degrees(self.gyro_bias):+.3f} deg/s from {len(self.gyro_cal)} samples")
+            self.gyro_t = t
+            return
+        if self.gyro_t is not None and 0 < t - self.gyro_t < 0.1:
+            self.gyro_yaw += (w[2] - self.gyro_bias) * (t - self.gyro_t)
+        self.gyro_t = t
+
     def update_fused(self):
         """Fused odometry, once per control step. Wheels drift when the omni rollers slip
         under hard strafing (20-30 cm after ~40 s, runs 12c and 13: the robot did not know
@@ -192,9 +229,10 @@ class BallPolicyNode(Node):
         facing a plain wall (runs 4-5). So: each step, compare the two sources' motion in
         the robot's own frame; trust cuVSLAM, unless it disagrees with the wheels by more
         than FUSE_JUMP_M, which only a jump can do; then take the wheels' step."""
-        if not self.odom_hist:
+        if not self.odom_hist or (self.use_gyro and self.gyro_bias is None):
             return False
         _, pw, yw = self.odom_hist[-1]
+        gy = self.gyro_yaw
         try:
             t = self.tf.lookup_transform("odom", "base_link", Time())
             pv, yv = np.array([t.transform.translation.x, t.transform.translation.y]), yaw_of(t.transform.rotation)
@@ -214,6 +252,7 @@ class BallPolicyNode(Node):
         if self.fused is None:
             self.fused = (np.zeros(2), 0.0)
             self.prev_w, self.prev_v = (pw, yw), ((pv, yv) if pv is not None else None)
+            self.prev_g = gy
         else:
             dw = rot(-self.prev_w[1]) @ (pw - self.prev_w[0])
             dyw = math.remainder(yw - self.prev_w[1], 2 * math.pi)
@@ -224,6 +263,9 @@ class BallPolicyNode(Node):
                 use_v = np.linalg.norm(dv - dw) < FUSE_JUMP_M and abs(dyv - dyw) < FUSE_JUMP_RAD
             d, dy = (dv, dyv) if use_v else (dw, dyw)
             self.n_fuse["vslam" if use_v else "wheel"] += 1
+            if self.use_gyro:
+                dy = gy - self.prev_g                    # turning: always the gyro
+                self.prev_g = gy
             p, yaw = self.fused
             self.fused = (p + rot(yaw) @ d, yaw + dy)
             self.prev_w, self.prev_v = (pw, yw), ((pv, yv) if pv is not None else None)
@@ -231,6 +273,53 @@ class BallPolicyNode(Node):
         if len(self.fused_hist) > 100:
             self.fused_hist.pop(0)
         return True
+
+    def update_goal_from_markers(self, img, stamp):
+        """The box pose from the markers, robust to ArUco's planar-pose flip.
+
+        Run 16: seen side-on, the left-panel marker's ORIENTATION flipped, and the box
+        estimate jumped ~1 m towards the robot (a false goal against a phantom box).
+        A marker's centre POSITION stays reliable at any angle. So:
+          * the box's direction comes only from the front marker (ID 0), seen near head-on;
+            the box never moves, so it is measured once and then only refined;
+          * every marker then places the box from its centre position + that direction;
+          * a sighting implying a jump > 15 cm (or a turn > 20 deg) is discarded."""
+        from goal_marker import BOX_FROM_MARKER
+        res = self.markers.detect(img)
+        if not res:
+            return
+        try:
+            p, ryaw = self.pose(stamp)
+        except tf2_ros.TransformException:
+            return
+        R = rot(ryaw)
+        accepted = []
+        for mid, box_xy_b, box_yaw_b, dist, mc_b in res:
+            if mid == 0:
+                yaw_w = ryaw + box_yaw_b
+                if self.goal_w is None or abs(math.remainder(yaw_w - self.goal_w[1], 2 * math.pi)) < math.radians(20):
+                    self.goal_yaw_w = yaw_w if self.goal_yaw_w is None else \
+                        self.goal_yaw_w + 0.3 * math.remainder(yaw_w - self.goal_yaw_w, 2 * math.pi)
+            if self.goal_yaw_w is None:
+                continue                                    # no trusted direction yet: wait for ID 0
+            # box origin = marker centre - (marker's offset in the box frame, rotated by the box direction)
+            c_box = BOX_FROM_MARKER[mid][:2, 3]
+            g = p + R @ mc_b - rot(self.goal_yaw_w) @ c_box
+            if self.goal_w is not None and np.linalg.norm(g - self.goal_w[0]) > 0.15:
+                self.marker_rejected += 1
+                continue
+            accepted.append((mid, g))
+        if not accepted:
+            return
+        g = np.mean([a[1] for a in accepted], axis=0)
+        if self.goal_w is not None:
+            g = 0.7 * self.goal_w[0] + 0.3 * g
+        self.goal_w = (g, self.goal_yaw_w)
+        self.goal_seen_t = time.time()
+        self.n_marker += 1
+        self.last_marker_ids = sorted({a[0] for a in accepted})
+        for a in accepted:
+            self.marker_counts[a[0]] = self.marker_counts.get(a[0], 0) + 1
 
     def pose(self, stamp=None):
         """base_link in odom: (x, y, yaw), at stamp if given. From the wheel encoders
@@ -268,6 +357,9 @@ class BallPolicyNode(Node):
             except tf2_ros.TransformException:
                 return False
             self.detector = BallDetector(self.K, self.D, T, self.r, self.r - BASE_LINK_Z, yolo=self.yolo)
+            if self.goal_source == "marker":
+                from goal_marker import GoalMarkers
+                self.markers = GoalMarkers(self.K, self.D, T, size=self.marker_size)
             self.get_logger().info(f"detector ready; colour lens in base_link at {np.round(T[:3, 3], 3)}")
         if self.use_scan and self.scanner is None:
             if self.depth_K is None:
@@ -298,6 +390,8 @@ class BallPolicyNode(Node):
         img = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, -1)[..., :3]
         if msg.encoding.lower().startswith("bgr"):
             img = img[..., ::-1]
+        if self.markers is not None:
+            self.update_goal_from_markers(np.ascontiguousarray(img), msg.header.stamp)
         t = time.perf_counter()
         d = self.detector.detect(np.ascontiguousarray(img))
         self.det_ms.append((time.perf_counter() - t) * 1000)
@@ -363,8 +457,11 @@ class BallPolicyNode(Node):
         self.prev_p = p
         sp, syaw = self.start
         # goal (box mouth centre) and its into-box direction, in odom
-        g_w = sp + rot(syaw) @ self.goal_xy
-        gdir = syaw + self.goal_yaw
+        if self.goal_w is not None:                      # from the markers
+            g_w, gdir = self.goal_w
+        else:                                            # from the start mark
+            g_w = sp + rot(syaw) @ self.goal_xy
+            gdir = syaw + self.goal_yaw
         # the ball in the goal's frame (x into the box, y across the mouth)
         b_g = rot(-gdir) @ (self.est_w - g_w)
         # the point to push towards: one radius inside the mouth, level with the ball
@@ -419,10 +516,12 @@ class BallPolicyNode(Node):
                 f" at ({ball_s[0]:+.2f},{ball_s[1]:+.2f}) goal-frame ({b_g[0]:+.2f},{b_g[1]:+.2f}) | action "
                 f"({self.action[0]:+.2f},{self.action[1]:+.2f},{self.action[2]:+.2f}) | det {np.mean(self.det_ms[-20:]) if self.det_ms else 0:.0f} ms"
                 f" fit {self.last_fit[0]:.2f} deg {self.last_src}"
-                + (f" | scan L->R {np.round(self.last_scan[::3], 2)}" if self.use_scan else ""))
+                + (f" | scan L->R {np.round(self.last_scan[::3], 2)}" if self.use_scan else "")
+                + (f" | goal {'marker ' + str(self.last_marker_ids) + ' ' + format(time.time() - self.goal_seen_t, '.1f') + 's' if self.goal_w is not None else 'MARK'}"
+                   if self.goal_source == "marker" else ""))
         if reason:
             self.done = True
-            self.get_logger().warn(f"STOP: {reason} after {t:.1f} s ({self.n_det} detections, rejected {self.n_reject}"
+            self.get_logger().warn(f"STOP: {reason} after {t:.1f} s ({self.n_det} detections, {self.n_marker} marker sightings by id {self.marker_counts}, {self.marker_rejected} marker jumps rejected, rejected {self.n_reject}"
                                    + (f", odometry steps from {self.n_fuse}" if self.odom_source == "fused" else "") + ")")
             raise SystemExit
 
