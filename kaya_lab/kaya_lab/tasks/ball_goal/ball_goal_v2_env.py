@@ -66,8 +66,12 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
         self._room, self._obs_xy, self._obs_on = self._room.to(dev), self._obs_xy.to(dev), self._obs_on.to(dev)
         self._room[:, 0], self._room[:, 1], self._room[:, 2] = -2.0, -1.5, 1.5
         self._room[:, 3] = cfg.goal_line_x + GOAL_DEPTH + CARDBOARD_T
-        for k in ("ball_speed", "bump", "jam"):
+        for k in ("ball_speed", "bump", "jam", "center_push", "kick"):
             self._sums[k] = torch.zeros(self.num_envs, device=dev)
+        self._jam_run = torch.zeros(self.num_envs, device=dev)          # consecutive jammed steps
+        self._since_jam = torch.full((self.num_envs,), 99.0, device=dev)  # steps since the last jam
+        self._kicked = torch.ones(self.num_envs, dtype=torch.bool, device=dev)
+        self._backed = torch.zeros(self.num_envs, dtype=torch.bool, device=dev)  # backed off since the jam
         a = math.radians(cfg.ray_fov_deg / 2)
         self._ray_ang = torch.linspace(a, -a, cfg.n_rays, device=dev)       # left to right, like the image
 
@@ -139,6 +143,10 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
             env_ids = torch.arange(self.num_envs, device=self.device)
         env_ids = torch.as_tensor(env_ids, device=self.device)
         self._place_obstacles(env_ids)
+        self._jam_run[env_ids] = 0.0
+        self._since_jam[env_ids] = 99.0
+        self._kicked[env_ids] = True
+        self._backed[env_ids] = False
 
     def _place_obstacles(self, env_ids):
         cfg, dev, n = self.cfg, self.device, len(env_ids)
@@ -264,11 +272,34 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
         # and not moving - the real robot's failure in runs 12b/12c
         jam = (self._in_pocket() & (self._ball_clearance() < 0.02) & (v < cfg.jam_ball_speed)
                & (self._actions[:, 0] > 0.2))
+        # jam bookkeeping (v2.3). The user's recipe for a pinned ball: "step back, then strike it
+        # with the right or left wheel as a kick, then come back and see the next move". So a kick
+        # is rewarded once per jam, and only when, within kick_window steps of the jam ending,
+        # the robot first BACKED OFF (drove backwards) and the ball then moves off after being
+        # struck OFF-CENTRE (sitting in front of a front wheel, not the middle of the pocket).
+        ball_b = self._to_body(self.ball.data.root_pos_w.torch)
+        self._jam_run = torch.where(jam, self._jam_run + 1, torch.zeros_like(self._jam_run))
+        self._since_jam = torch.where(jam, torch.zeros_like(self._since_jam), self._since_jam + 1)
+        self._kicked = torch.where(jam, torch.zeros_like(self._kicked), self._kicked)
+        self._backed = torch.where(jam, torch.zeros_like(self._backed),
+                                   self._backed | (self._actions[:, 0] < -0.2))
+        # the ball just in front (it is already leaving the pocket as it is struck), to one side
+        off_centre = ((ball_b[:, 0] > 0.0) & (ball_b[:, 0] < cfg.pocket_x[1] + 0.05)
+                      & (ball_b[:, 1].abs() >= cfg.kick_min_y) & (ball_b[:, 1].abs() < 0.20))
+        kick = (~self._kicked & self._backed & off_centre & (self._since_jam > 0)
+                & (self._since_jam <= cfg.kick_window) & (v > cfg.kick_speed))
+        self._kicked = self._kicked | kick
+        # square-on push into a surface: the ball centred in the pocket, next to a wall / obstacle
+        # / box panel, and the robot driving forward (the real robot jams it this way)
+        center_push = (self._in_pocket() & (ball_b[:, 1].abs() < cfg.center_push_half_y)
+                       & (self._ball_clearance() < cfg.center_push_clear) & (self._actions[:, 0] > 0.3))
         extra = {
             "ball_speed": cfg.rew_ball_speed * (v - cfg.ball_speed_free).clamp(min=0.0),
             "bump": cfg.rew_bump * (self._clearance() < cfg.bump_dist).float(),
-            "jam": cfg.rew_jam * jam.float(),
+            "jam": cfg.rew_jam * jam.float() * (1.0 + cfg.jam_escalate * self._jam_run),
+            "center_push": cfg.rew_center_push * center_push.float(),
+            "kick": cfg.rew_kick * kick.float(),
         }
         for k, x in extra.items():
             self._sums[k] += x
-        return rew + extra["ball_speed"] + extra["bump"] + extra["jam"]
+        return rew + sum(extra.values())

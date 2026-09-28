@@ -560,3 +560,60 @@ pieces were:
 - a *reason to stop pushing* (a jam cost nothing but time).
 v2.1 adds side-panel starts and a jam penalty, and keeps v2's ball.
 **Test your fix does what you think before you train on it.**
+
+## Fully on-board: stall detection (2026-09-28, night)
+
+Up against a wall, the wheel encoders say the robot is still moving (0.08 m/s
+while blocked) and the camera sees plain cardboard: both of its senses lie.
+A third one doesn't: **the IMU feels the hit.** A wall hit is a -1.27 m/s^2
+deceleration spike. A free ball push has none. The detector:
+- averages the forward deceleration over 0.1 s (run 19 used 3 samples, so
+  floor vibration read as impacts: 552 of 589 steps "stalled");
+- when it goes over 0.6 m/s^2, freezes the wheel distance;
+- **holds that for 3 s while the command still pushes the same way.** A 0.7 s
+  hold let the wheels creep "through" the wall.
+
+Checks: open floor 4/60 steps flagged; wall froze at 0.34 m and held.
+
+**Feed the policy what the sim would.** When stalled, the policy's speed
+input is now 0, because in the sim a blocked robot's speed IS 0. Before this,
+the policy saw "moving forward at 0.08" while pressed on a pinned ball, and
+simply kept doing what worked while moving.
+
+## v2.2: strike off-centre (your idea)
+
+Pushing a ball square-on into a surface drives it straight into the surface.
+Struck off-centre with a front wheel, it has a side to escape to. v2.2 adds a
+small penalty for pushing forward with the ball *centred* in the pocket next
+to a wall, box panel or obstacle, and a top speed of 0.10 m/s.
+
+## v2.3: back off, then kick (your idea, run it like a footballer)
+
+Your words: "step back, then strike it from the right wheel or left wheel as
+a kick, and then come back and see the next move". Two changes to the reward:
+1. **The jam penalty escalates.** Each consecutive jammed step costs
+   `rew_jam * (1 + 0.15 * steps jammed so far)`, so after 2 s the press costs
+   4x as much. Holding a jam gets steadily more expensive.
+2. **The kick bonus (+1, once per jam) pays only for your recipe.** Within
+   2 s after the jam ends, the robot must first have **driven backwards**,
+   and the ball must then move off (> 0.10 m/s) while it sits **to one side
+   of the robot's front** (5-20 cm off the centreline, i.e. in front of a
+   front wheel). A square-on shove that happens to free the ball earns
+   nothing.
+
+**Why a condition-heavy bonus instead of just "ball moved = good"?** RL
+optimises what you pay for, not what you meant. "Ball moved after a jam"
+would also pay a robot that jams, shoves harder and gets lucky. Encode the
+behaviour, then watch that the term fires for the right reason.
+
+This is a **fine-tune** from the v2.2 checkpoint (model_549), not training
+from scratch. The policy already scores; we only reshape how it gets out of
+jams. It starts with 0.25 kick reward per episode because v2.2 sometimes did
+this by chance, and PPO makes it more likely.
+
+**A bug found on the way:** every training run since B1 printed "Patch
+buffer overflow" once, at the first reset. PhysX was dropping contacts on
+that step: the v2 rooms needed 1.08M contact patches and got 262k. That was
+harmless here (one step, before learning starts), but a dropped contact can
+let a ball fall through a wall. The v2 configs now reserve 2^21. **Read the
+errors in your logs even when training "works".**

@@ -105,6 +105,10 @@ class KayaBallGoalDetEnvCfg(KayaBallGoalEnvCfg):
 @configclass
 class KayaBallGoalV2EnvCfg(KayaBallGoalDetEnvCfg):
     episode_length_s = 60.0
+    # the room walls and obstacles add contacts: the first reset at 4096 envs asked PhysX for
+    # ~1.08M patches (v2 - v2.2 logs), so the 2**18 buffer above dropped contacts on that reset
+    sim: SimulationCfg = SimulationCfg(dt=1.0 / PHYSICS_HZ, render_interval=8,
+                                       physics=PhysxCfg(gpu_max_rigid_patch_count=2**21))
     # B2's 15 + the 16-ray depth scan
     observation_space = 31
     # + true ball position and velocity for the critic
@@ -151,6 +155,14 @@ class KayaBallGoalV2EnvCfg(KayaBallGoalDetEnvCfg):
     rew_jam = 0.0                         # per step pushing a ball that is jammed against something
     jam_ball_speed = 0.03                 # [m/s] "not moving"
     side_panel_frac = 0.0                 # of wall starts: ball against the OUTSIDE of a box side panel
+    rew_center_push = 0.0                 # per step pushing a CENTRED ball that is right next to a surface
+    center_push_half_y = 0.03             # [m] "centred in the pocket"
+    center_push_clear = 0.05              # [m] ball surface to wall / obstacle / box panel
+    jam_escalate = 0.0                    # jam penalty x (1 + jam_escalate * consecutive jammed steps)
+    rew_kick = 0.0                        # once per jam: back off, then strike it off-centre so it moves
+    kick_speed = 0.10                     # [m/s] ball speed that counts as freed
+    kick_min_y = 0.05                     # [m] ball centre this far to the side = a front-wheel strike
+    kick_window = 20                      # [policy steps] 2 s after the jam ends to back off and strike
 
 
 @configclass
@@ -164,3 +176,28 @@ class KayaBallGoalV21EnvCfg(KayaBallGoalV2EnvCfg):
 
     rew_jam = -0.2
     side_panel_frac = 0.3
+
+
+@configclass
+class KayaBallGoalV22EnvCfg(KayaBallGoalV21EnvCfg):
+    """v2.2 (the user's observation on the real robot, 2026-09-28): the ball jams when Kaya
+    pushes it square-on, centred between the front wheels, into a wall or the box's side:
+    the front wheels trap it sideways. A footballer strikes it off-centre so it squirts out
+    along the wall. Penalise pushing a centred ball that is right next to a surface;
+    off-centre (front-wheel) strikes are free. At the gentler 0.10 m/s."""
+
+    rew_center_push = -0.1
+    max_lin_vel = 0.10
+
+
+@configclass
+class KayaBallGoalV23EnvCfg(KayaBallGoalV22EnvCfg):
+    """v2.3 (the user, watching the real robot pin a ball against the box's side panel, 2026-09-28:
+    "the robot should learn to slightly go back, relax and then hit, not push all the time - it has
+    to kick and then take the ball"). Holding a jammed ball gets steadily more expensive (the
+    penalty grows with every consecutive jammed step), and freeing it earns a bonus - but only the
+    way the user described it: back off first, then strike the ball off-centre with a front wheel
+    so it moves off, then come back and play the next touch."""
+
+    jam_escalate = 0.15
+    rew_kick = 1.0

@@ -5,7 +5,8 @@ import gymnasium as gym
 from isaaclab.utils.configclass import configclass
 
 from .ball_goal_env_cfg import (KayaBallGoalDetEnvCfg, KayaBallGoalEnvCfg, KayaBallGoalV2EnvCfg,  # noqa: F401
-                                KayaBallGoalV21EnvCfg)
+                                KayaBallGoalV21EnvCfg, KayaBallGoalV22EnvCfg,
+                                KayaBallGoalV23EnvCfg)
 
 
 @configclass
@@ -26,6 +27,12 @@ def register():
          "ball_goal_v2_env:KayaBallGoalV2Env"),
         # v2.1: a ball that jams when pushed into walls; fine-tuned from v2 (same runner/experiment)
         ("Kaya-BallGoal-V21-v0", "KayaBallGoalV21EnvCfg", "KayaBallGoalV2PPORunnerCfg",
+         "ball_goal_v2_env:KayaBallGoalV2Env"),
+        # v2.2: strike off-centre near walls (no square-on pushes into a surface), 0.10 m/s
+        ("Kaya-BallGoal-V22-v0", "KayaBallGoalV22EnvCfg", "KayaBallGoalV2PPORunnerCfg",
+         "ball_goal_v2_env:KayaBallGoalV2Env"),
+        # v2.3: back off and strike a jammed ball instead of holding the press (escalating jam penalty + kick)
+        ("Kaya-BallGoal-V23-v0", "KayaBallGoalV23EnvCfg", "KayaBallGoalV2PPORunnerCfg",
          "ball_goal_v2_env:KayaBallGoalV2Env"),
     ]:
         if task_id in gym.registry:
