@@ -10,14 +10,19 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 from kaya_lab.ball_detector import BallDetector, optical_from_pitch   # noqa: E402
 
+sys.path.insert(0, str(HERE / "scripts"))
+import robot_camera_calib as cal   # noqa: E402
 K = [[404.85430908, 0, 423.50286865], [0, 405.0791626, 237.02305603], [0, 0, 1]]
-T = optical_from_pitch((0.024, 0.024, 0.138), np.radians(4.89))
-det = BallDetector(K, None, T, ball_radius=0.0765, ball_centre_z_base=0.0765 - 0.037)
+T_doc = optical_from_pitch((0.024, 0.024, 0.138), np.radians(4.89))
+variants = {
+    "documented pose, no distortion": BallDetector(K, None, T_doc, 0.070, 0.070 - 0.037),
+    "robot TF + real distortion": BallDetector(cal.K, cal.D, cal.T_base_optical(), 0.070, 0.070 - 0.037),
+}
 d = HERE / "data" / "ball_frames_20260927"
 for f, note in [("ball_0p5m.png", "~0.5 m ahead"), ("ball_10cm_gap.png", "10 cm gap"),
-                ("ball_touch_centre.png", "touching, centred (sim contact x 15.9)"),
+                ("ball_touch_centre.png", "touching, centred (sim contact x 15.3)"),
                 ("ball_touch_wheel_a.png", "touching + wheel"), ("ball_touch_wheel_b.png", "touching + other wheel")]:
     rgb = cv2.cvtColor(cv2.imread(str(d / f)), cv2.COLOR_BGR2RGB)
-    r = det.detect(rgb)
-    print(f"{note:40s} ok={r.ok} base x {r.x*100:5.1f} y {r.y*100:+5.1f} cm  fit rms {r.rms_deg:.2f} deg  "
-          f"area {r.area_px} px  cut-off {r.truncated}")
+    for name, det in variants.items():
+        r = det.detect(rgb)
+        print(f"{note:32s} [{name:31s}] base x {r.x*100:5.1f} y {r.y*100:+5.1f} cm  rms {r.rms_deg:.2f} deg")

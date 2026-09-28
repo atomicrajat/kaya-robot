@@ -9,6 +9,7 @@ from isaaclab.assets import ArticulationCfg, RigidObjectCfg
 from isaaclab.envs import DirectRLEnvCfg, ViewerCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
+from isaaclab_physx.physics import PhysxCfg
 from isaaclab.utils.configclass import configclass
 
 from kaya_lab.assets import KAYA_CFG, PHYSICS_HZ
@@ -21,7 +22,11 @@ from ..point_goal.point_goal_env_cfg import TRAIN_SOLVER_POS_ITERS
 class KayaBallGoalEnvCfg(DirectRLEnvCfg):
     decimation = PHYSICS_HZ // 10            # policy at 10 Hz
     episode_length_s = 45.0
-    sim: SimulationCfg = SimulationCfg(dt=1.0 / PHYSICS_HZ, render_interval=8)
+    # 4096 robots + balls landing at the first reset overflowed PhysX's default GPU contact
+    # patch buffer (163,840; asked for 179,927) - only before iteration 0, but contacts are
+    # dropped when it happens, so give it room.
+    sim: SimulationCfg = SimulationCfg(dt=1.0 / PHYSICS_HZ, render_interval=8,
+                                       physics=PhysxCfg(gpu_max_rigid_patch_count=2**18))
 
     action_space = 3
     # ball pos (2), ball vel (2), goal point (2), goal direction (2), goal half-width (1),
@@ -75,10 +80,11 @@ class KayaBallGoalEnvCfg(DirectRLEnvCfg):
     rew_action_rate = -0.05
 
     # front pocket, in the robot's base frame (from b0_ball_contact_probe: the
-    # ball centre touches the flat front at x = 0.159, wheels funnel within |y| < 0.12)
+    # ball centre touches the flat front (the battery) at x = 0.0825 + r = 0.1525 for the
+    # 14 cm ball; the wheels funnel within |y| < 0.12)
     pocket_x = (0.12, 0.21)
     pocket_half_y = 0.12
-    touch_dist = 0.16                        # centre-to-centre distance at contact (front)
+    touch_dist = 0.153                       # centre-to-centre distance at contact (front)
 
 
 @configclass

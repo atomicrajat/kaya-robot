@@ -1,12 +1,13 @@
 """The real ball and the real goal, as Isaac Lab assets.
 
-Ball (measured 2026-09-27): 15.3 cm, 113 g, air-filled rubber, matte yellow
+Ball: 14.0 cm (re-measured by the user 2026-09-28, circumference 44 cm; the 15.3 cm used until then
+was wrong and made every real-frame fit disagree), 112 g, air-filled rubber, matte yellow
 with black stripes. Grips the tile and rolls easily.
 
 Goal (the user's build, 2026-09-28): an open-fronted cardboard box lying on
 its side, mouth 46 cm wide x 30 cm tall, 30 cm deep, cardboard on all
 inner faces (back, sides, top). It replaced a 120 x 60 x 12 cm frame: the ball
-(15.3 cm) fits completely inside 30 cm, so "scored" is strict - the WHOLE
+(14 cm) fits completely inside 30 cm, so "scored" is strict - the WHOLE
 ball behind the mouth, between the side panels. It stands free (no wall
 needed); a wall behind it is kept in sim as the room's wall.
 """
@@ -16,8 +17,8 @@ import torch
 import isaaclab.sim as sim_utils
 from isaaclab.assets import RigidObjectCfg
 
-BALL_RADIUS = 0.153 / 2
-BALL_MASS = 0.113
+BALL_RADIUS = 0.140 / 2
+BALL_MASS = 0.112          # weighed by the user (112 g)
 # thin shell: I = 2/3 m r^2 (a solid ball would be 2/5 m r^2 - it would roll
 # off the robot's front differently)
 BALL_INERTIA = 2.0 / 3.0 * BALL_MASS * BALL_RADIUS**2

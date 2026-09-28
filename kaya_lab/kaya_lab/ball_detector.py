@@ -29,7 +29,7 @@ HSV_LO = (20, 120, 80)
 HSV_HI = (34, 255, 255)
 CLOSE_PX = 15                  # closes the ball's black stripes
 MIN_AREA_PX = 150
-MIN_X_BASE = 0.14             # [m] no ball centre closer than this in front of base_link
+MIN_X_BASE = 0.12             # [m] no ball centre closer than this in front of base_link (real touching: ~13.8)
 
 
 @dataclass
@@ -79,8 +79,17 @@ class BallDetector:
             return Detection(False, area_px=area)
         blob = (lab == i).astype(np.uint8)
         cs, _ = cv2.findContours(blob, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        c = max(cs, key=len)[:, 0, :].astype(np.float64)
-        on_border = (c[:, 0] <= 1) | (c[:, 0] >= w - 2) | (c[:, 1] <= 1) | (c[:, 1] >= h - 2)
+        # A sphere's silhouette is convex, so any dent in the blob is not a real edge: on
+        # the real ball, the black stripes and the glare patch on top notch the outline
+        # (touching frames fitted at 4-6 deg rms and ~20 cm wrong). Fit the convex hull,
+        # resampled densely along its sides.
+        hull = cv2.convexHull(max(cs, key=len))[:, 0, :].astype(np.float64)
+        pts = []
+        for a, b in zip(hull, np.roll(hull, -1, axis=0)):
+            k = max(1, int(np.hypot(*(b - a))))
+            pts.append(a + (b - a) * (np.arange(k)[:, None] / k))
+        c = np.concatenate(pts)
+        on_border = (c[:, 0] <= 2) | (c[:, 0] >= w - 3) | (c[:, 1] <= 2) | (c[:, 1] >= h - 3)
         edge = c[~on_border]
         truncated = bool(on_border.any())
         if len(edge) < 12:
@@ -99,7 +108,7 @@ class BallDetector:
         # real frames: a touching ball fitted at 30 cm). So first a coarse grid over the
         # floor ahead of the camera, scored in one vectorised pass, then refine the best.
         # x starts at MIN_X_BASE: the ball's centre cannot be inside the robot (it touches
-        # the flat front at x = 0.159 m, b0_ball_contact_probe), so a fit there is a wrong valley
+        # the flat front at x = 0.0825 m + radius: 0.1525 for the 14 cm ball), so a fit there is a wrong valley
         gx, gy = np.meshgrid(np.arange(MIN_X_BASE, 3.0, 0.03), np.arange(-1.5, 1.5, 0.03), indexing="ij")
         G = np.column_stack([gx.ravel(), gy.ravel(), np.full(gx.size, self.zc)]) - self.t
         dG = np.linalg.norm(G, axis=1)

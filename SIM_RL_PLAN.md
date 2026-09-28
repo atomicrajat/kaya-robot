@@ -317,6 +317,30 @@ rolling resistance, set from the measurements below.
 - **B4:** sim-to-sim: run the policy in the full-fidelity scene (RTX-rendered
   colour camera plus a real HSV detector on it, full roller physics,
   `KayaDriver`).
+- **B5 FIRST REAL GOALS (2026-09-28).** `kaya_lab/robot/ball_policy_node.py`
+  (numpy policy, image detector, odometry memory, goal from a taped start
+  mark), on branch isaac-sim-usd deployed to the robot (expo services
+  disabled, `expo` branch kept as backup). Setup: box mouth 1.50 m from the
+  battery face (goal_x 1.57), ball ~40 cm ahead. Logs and snapshots:
+  `kaya_lab/data/b5_runs_20260928/`.
+  - The ball is **14.0 cm (circumference 44 cm), 112 g**, not 15.3 cm. The
+    wrong size had made every real-frame fit fail (4-6 deg); with 14 cm they fit
+    at 0.24-0.86 deg with the robot's own camera calibration. B2 fine-tuned 50
+    iterations on 14 cm (100% in sim):
+    `~/IsaacLab/logs/rsl_rl/kaya_ball_goal_det/2026-09-28_11-25-06_ball14cm_finetune/model_350.pt`.
+  - **Run 1: SCORED in 29 s**, confirmed by the user. For ~12 s it chased
+    phantoms 4-5 m to the side, then found the ball, drove behind it,
+    pushed it 80 cm and strafed to line up at the mouth.
+  - **Run 2: SCORED in 34.8 s.** Phantom rejection added: sphere-fit residual
+    and play-area gates. A 1.5 deg fit gate rejected the REAL ball close up
+    (moving: 1.8-3.1 deg) and caused hesitation; phantoms (a wooden desk edge)
+    fit at 12-17 deg. The gate is now 5 deg.
+  - Real brown cardboard under room light partly passes the colour threshold
+    (speckles), as the B4 sim run predicted.
+  - Jetson: detector 56-75 ms per frame, policy 0.13 ms; no PyTorch or ONNX
+    on the robot, the policy runs in numpy (matches TorchScript to 1e-5).
+  - The dry run is not meaningful for actions: "last action" feedback with a
+    robot that doesn't move saturates the outputs.
 - **B5 (real robot):** a ROS 2 node with the HSV detector and odometry goal
   in, `/cmd_vel` out. On the floor at home: the ball and a tape goal square.
   Needs the pending robot session first (frame-sync check, URDF camera fixes
