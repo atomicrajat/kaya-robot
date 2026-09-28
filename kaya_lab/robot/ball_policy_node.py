@@ -42,6 +42,7 @@ from numpy_policy import NumpyPolicy
 
 MAX_LIN, MAX_ANG = 0.15, 1.0          # drive node limits; the policy was trained on these
 AGE_CAP_S = 5.0                       # as in training
+STALL_MAX_TURN = 0.5                  # [rad/s] impacts are not trusted while turning faster
 COLOUR_TRUST_S = 5.0                  # a colour-only ball detection needs YOLO within this long
 BOX_FRESH_S = 10.0                    # a goal only counts within this long of a marker sighting
 FUSE_JUMP_M = 0.05                    # per 0.1 s step: 0.5 m/s of disagreement = a visual jump
@@ -267,7 +268,9 @@ class BallPolicyNode(Node):
             if len(self.acc_buf) < 8:
                 return
             decel = -float(np.mean([b[1] for b in self.acc_buf], axis=0) @ (v / np.linalg.norm(v)))
-            if decel > STALL_IMPACT:
+            # not while turning hard: the IMU sits off the robot's centre, so a spin in place reads
+            # as a steady sideways acceleration (run 29: 592 of 808 steps "stalled" while it spun)
+            if decel > STALL_IMPACT and abs(self.gyro_rate) < STALL_MAX_TURN:
                 # latched while the robot keeps pushing the same way (the depth is blind against a
                 # plain wall, so nothing else can see that it is still blocked; check 2 of the
                 # stall tests: a 0.7 s hold let the spinning wheels creep 15 cm through the wall)
@@ -510,7 +513,9 @@ class BallPolicyNode(Node):
         ball_w = p + rot(yaw) @ np.array([d.x, d.y])
         sp, syaw = self.start
         b_s = rot(-syaw) @ (ball_w - sp)                   # in the start frame
-        if b_s[0] < -self.arena[0] or b_s[0] > self.goal_xy[0] + 0.4 or abs(b_s[1]) > self.arena[1] + 0.5:
+        # a ball behind the start is real (run 29: YOLO saw it 1.3 m behind, the check threw it
+        # away 69 times and the robot spun for 90 s), so behind, allow the arena + 1 m
+        if b_s[0] < -self.arena[0] - 1.0 or b_s[0] > self.goal_xy[0] + 0.4 or abs(b_s[1]) > self.arena[1] + 0.5:
             return True, self._reject("outside", img, d, b_s)
         # Colour-only detections ("round", "near") need YOLO's backing: run 28 chased yellow-brown
         # cardboard blobs for 27 s while the ball sat behind the robot - YOLO confirmed none of
