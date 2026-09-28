@@ -155,7 +155,11 @@ class BallPolicyNode(Node):
         self.wheel_fwd = 0.0
         self.n_stalled = 0
         if self.use_gyro:
-            self.create_subscription(Imu, "/camera/gyro_accel/sample", self.on_imu, best_effort)
+            # every sample, in order: depth 1 kept only the newest while a 50-170 ms detection held
+            # the executor, and the dropped rotation left run 32's heading ~65 deg off after its
+            # search spin (the box then "moved" 1.8 m and the robot pushed the ball the wrong way)
+            imu_qos = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=400, reliability=ReliabilityPolicy.BEST_EFFORT)
+            self.create_subscription(Imu, "/camera/gyro_accel/sample", self.on_imu, imu_qos)
         self.vio_z0, self.vio_dead = None, False
         # cuVSLAM loses tracking near plain walls and can then report "no motion" while still
         # alive (the pinned-ball stall test) - and with the IR projector on for depth, its
@@ -253,8 +257,9 @@ class BallPolicyNode(Node):
                 self.get_logger().info(f"gyro bias {math.degrees(self.gyro_bias):+.3f} deg/s from {len(self.gyro_cal)} samples")
             self.gyro_t = t
             return
-        if self.gyro_t is not None and 0 < t - self.gyro_t < 0.1:
-            self.gyro_yaw += (w[2] - self.gyro_bias) * (t - self.gyro_t)
+        if self.gyro_t is not None and 0 < t - self.gyro_t < 0.5:
+            # trapezoid over the gap; a gap this long now means a lost burst, still better counted
+            self.gyro_yaw += 0.5 * (w[2] - self.gyro_bias + self.gyro_rate) * (t - self.gyro_t)
             self.gyro_rate = w[2] - self.gyro_bias
         self.gyro_t = t
         # impact: horizontal deceleration against the direction the wheels are driving
