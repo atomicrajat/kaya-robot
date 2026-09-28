@@ -130,6 +130,7 @@ class BallPolicyNode(Node):
         self.save_rejects = P("save_rejects", True).value
         self.n_reject = {"fit": 0, "outside": 0, "unconfirmed": 0}
         self.yolo_t, self.yolo_w = None, None               # the last YOLO-backed ball sighting
+        self.round_buf = []                                 # recent "round" sightings (t, xy in odom)
 
         self.tf = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf, self)
@@ -521,7 +522,17 @@ class BallPolicyNode(Node):
         # cardboard blobs for 27 s while the ball sat behind the robot - YOLO confirmed none of
         # them. So one counts only within COLOUR_TRUST_S of a YOLO sighting, and near where the
         # ball was then (it can have rolled since: the gate grows with the time)
+        # A "round" blob can also START a track on its own, if it stays put: 3 sightings within
+        # 1.5 s agreeing to 15 cm. The real ball 1.8 m away, too small for YOLO, did (run 30:
+        # -1.46/-1.58/-1.53, -1.00/-1.03/-1.04); run 28's cardboard "balls" jumped 0.5-1 m
+        # between frames, because a patch of wall fitted as a sphere moves with the viewpoint.
         now = time.time()
+        if d.source == "round":
+            self.round_buf = [(t, w) for t, w in self.round_buf if now - t < 1.5] + [(now, ball_w)]
+            pts = np.array([w for _, w in self.round_buf[-3:]])
+            if len(pts) == 3 and np.linalg.norm(pts - pts.mean(0), axis=1).max() < 0.15 and \
+                    (self.yolo_t is None or now - self.yolo_t > COLOUR_TRUST_S):
+                self.yolo_t, self.yolo_w = now, ball_w          # a steady round blob: trust it
         if d.source == "yolo":
             self.yolo_t, self.yolo_w = now, ball_w
         elif self.yolo_t is None or now - self.yolo_t > COLOUR_TRUST_S or \
