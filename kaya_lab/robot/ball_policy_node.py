@@ -403,10 +403,11 @@ class BallPolicyNode(Node):
                 self.reject_run = self.reject_run[-3:]
                 if len(self.reject_run) == 3 and max(np.linalg.norm(r - np.mean(self.reject_run, axis=0))
                                                      for r in self.reject_run) < 0.05:
-                    self.goal_w = (np.mean(self.reject_run, axis=0), self.goal_yaw_w)
+                    new = np.mean(self.reject_run, axis=0)
+                    self.get_logger().warn(f"box re-anchored by {np.linalg.norm(new - self.goal_w[0]):.2f} m (odometry drift)")
+                    self.goal_w = (new, self.goal_yaw_w)
                     self.marker_reanchored += 1
                     self.reject_run = []
-                    self.get_logger().warn(f"box re-anchored by {np.linalg.norm(g - self.goal_w[0]):.2f} m (odometry drift)")
                 continue
             self.reject_run = []
             accepted.append((mid, g))
