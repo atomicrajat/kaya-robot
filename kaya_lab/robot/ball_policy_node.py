@@ -42,6 +42,7 @@ from numpy_policy import NumpyPolicy
 
 MAX_LIN, MAX_ANG = 0.15, 1.0          # drive node limits; the policy was trained on these
 AGE_CAP_S = 5.0                       # as in training
+BOX_FRESH_S = 10.0                    # a goal only counts within this long of a marker sighting
 FUSE_JUMP_M = 0.05                    # per 0.1 s step: 0.5 m/s of disagreement = a visual jump
 FUSE_JUMP_RAD = math.radians(8.0)
 # Stall detection (stall_probe measurements, 2026-09-28; the wheels keep spinning at the
@@ -158,6 +159,8 @@ class BallPolicyNode(Node):
         self.use_vio = P("use_vio", True).value
         # v2 policies also get a 16-ray depth scan (depth_scan.py); needs the depth stream on
         self.use_scan = P("use_scan", False).value
+        self.box_in_scan = P("box_in_scan", True).value     # fill the scan's box part from the box pose
+        self.box_part = None
         self.scanner = None
         self.depth_K = None
         self.latest_depth = None
@@ -585,7 +588,15 @@ class BallPolicyNode(Node):
             self.action,
         ])
         if self.use_scan:                                  # v2: + the 16-ray depth scan, / 3 m as in training
-            obs = np.concatenate([obs, self.depth_scan() / 3.0])
+            scan = self.depth_scan()
+            if self.box_in_scan:
+                # the box's part of the scan from its known pose: the real depth is blind to the
+                # panel the ball gets pinned against (see depth_scan.box_scan)
+                from depth_scan import box_scan
+                o_g = rot(-gdir) @ (p + rot(yaw) @ np.array([0.024, 0.024]) - g_w)
+                self.box_part = box_scan(o_g, yaw - gdir, self.half_w)
+                scan = np.minimum(scan, self.box_part)
+            obs = np.concatenate([obs, scan / 3.0])
             if self.use_gyro:
                 self.check_soft_stall()
         self.action = np.clip(self.policy(obs), -1.0, 1.0)
@@ -608,7 +619,12 @@ class BallPolicyNode(Node):
                 self.inside_t0 = self.inside_t0 or time.time()
             else:
                 self.inside_n, self.inside_t0 = 0, None
-        scored = (self.inside_n >= 3 and time.time() - self.inside_t0 >= 0.5 and self.seen_in_front)
+        # ... and with the box's position fresh: run 22 "scored" 21 s after the last marker, the
+        # box estimate carried by wheel odometry through 16 s of pinned wheel-spin (video: the
+        # ball was 50 cm right of the box)
+        box_fresh = self.goal_source != "marker" or time.time() - self.goal_seen_t < BOX_FRESH_S
+        scored = (self.inside_n >= 3 and time.time() - self.inside_t0 >= 0.5 and self.seen_in_front
+                  and box_fresh)
         left = p_s[0] < -self.arena[0] or abs(p_s[1]) > self.arena[1] or p_s[0] > self.goal_xy[0] + 0.5
         reason = "SCORED" if scored else "time limit" if t > self.max_time else "left the arena" if left else None
 
@@ -630,6 +646,7 @@ class BallPolicyNode(Node):
                 f"({self.action[0]:+.2f},{self.action[1]:+.2f},{self.action[2]:+.2f}) | det {np.mean(self.det_ms[-20:]) if self.det_ms else 0:.0f} ms"
                 f" fit {self.last_fit[0]:.2f} deg {self.last_src}"
                 + (f" | scan L->R {np.round(self.last_scan[::3], 2)}" if self.use_scan else "")
+                + (f" box {np.round(self.box_part[::3], 2)}" if self.box_part is not None else "")
                 + (f" | goal {'marker ' + str(self.last_marker_ids) + ' ' + format(time.time() - self.goal_seen_t, '.1f') + 's' if self.goal_w is not None else 'MARK'}"
                    if self.goal_source == "marker" else "")
                 + (f" | STALLED ({self.stall_reason})" if self.stalled() else ""))

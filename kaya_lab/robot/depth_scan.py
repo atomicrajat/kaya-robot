@@ -61,3 +61,34 @@ class DepthScan:
         inside = (idx >= 0) & (idx < self.n)
         np.minimum.at(out, idx[inside], np.minimum(dist[inside], self.max))
         return out
+
+
+GOAL_DEPTH = 0.30
+CARDBOARD_T = 0.01
+
+
+def box_scan(origin_g, heading_g, half_w, n_rays=16, fov_deg=92.0, max_range=3.0):
+    """The same 16 rays cast against the goal box's two side panels and the wall behind it,
+    as the sim's _scan does, from the lens origin and heading in the GOAL frame (x into the
+    box, origin at the mouth centre). Run 22: pressed against the outside of a side panel,
+    the real depth reads nothing (plain cardboard closer than ~0.3 m, projector off) and the
+    policy, told "3 m clear", pushed the ball into the panel for 16 s. The box's pose is
+    known from the markers, so its part of the scan can be computed instead of sensed."""
+    half = np.radians(fov_deg / 2)
+    ang = heading_g + np.linspace(half, -half, n_rays)
+    d = np.stack([np.cos(ang), np.sin(ang)], -1)
+    d = np.where(np.abs(d) < 1e-9, 1e-9, d)
+    o = np.asarray(origin_g, float)
+    t = np.full(n_rays, max_range)
+    # the wall behind the box (the box stands against it), facing the robot
+    tw = (GOAL_DEPTH - o[0]) / d[:, 0]
+    t = np.where((tw > 0) & (d[:, 0] > 0), np.minimum(t, tw), t)
+    # the side panels as thin slabs (slab test, as in the sim)
+    for y0, y1 in ((half_w, half_w + CARDBOARD_T), (-half_w - CARDBOARD_T, -half_w)):
+        tx0, tx1 = (0.0 - o[0]) / d[:, 0], (GOAL_DEPTH - o[0]) / d[:, 0]
+        ty0, ty1 = (y0 - o[1]) / d[:, 1], (y1 - o[1]) / d[:, 1]
+        tmin = np.maximum(np.minimum(tx0, tx1), np.minimum(ty0, ty1))
+        tmax = np.minimum(np.maximum(tx0, tx1), np.maximum(ty0, ty1))
+        hit = (tmax >= tmin) & (tmin > 0)
+        t = np.where(hit, np.minimum(t, tmin), t)
+    return np.minimum(t, max_range)
