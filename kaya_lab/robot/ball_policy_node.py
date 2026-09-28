@@ -343,10 +343,11 @@ class BallPolicyNode(Node):
             self.n_fuse["vslam" if use_v else "wheel"] += 1
             self.wheel_fwd += float(dw[0])
             if self.stalled():
-                # blocked: the wheels spin, but only the motion INTO the obstacle is lost. Run 21
-                # froze all of it and the robot, sliding sideways along the ball for 4 s, lost
-                # ~30 cm: the box markers then disagreed and were rejected, and a false goal followed
-                d = d - max(float(d @ self.stall_dir), 0.0) * self.stall_dir
+                # blocked: the wheels spin, the robot does not move - in ANY direction. Run 20's
+                # video: pinned against the box's side panel for 25 s while the wheels, strafing,
+                # "carried" it 1.5 m along the wall. (Keeping the sideways part, tried after run 21,
+                # would have kept that fiction.) Drift that gets through is fixed by the markers.
+                d = np.zeros(2)
                 self.n_stalled += 1
             if self.use_gyro:
                 dy = gy - self.prev_g                    # turning: always the gyro
