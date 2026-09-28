@@ -456,3 +456,44 @@ a box around the ball is not a distance. And the policy only ever sees
 "ball at (x, y), seen or not", so the detector can be swapped **without
 retraining**. Plan: colour first (cheap, 17 ms, explainable); switch (1) to
 a learned model if the real room fools it.
+
+---
+
+## 2026-09-28 - B5: the real robot
+
+**It worked:** a policy trained only in simulation scored with the real ball
+in the real box: runs 1, 2 and 7 (29, 35 and 21 s). The policy's own
+behaviour carried over: get behind the ball, push, strafe to line up. Every
+failure was in **perception or localisation**, not in the learned behaviour.
+That is the typical sim-to-real story.
+
+**The big lesson: measure the physical thing first.** The ball was 14 cm,
+not 15.3. With the wrong size, no real frame would fit, and three wrong
+theories followed (distortion, stripes and glare, camera height: fits can
+trade ball size against camera height). A tape measure settled it in one
+step. Verify inputs before you debug outputs.
+
+**Perception, in the order it failed:**
+1. Colour threshold only: fooled by warm light on wood and cardboard.
+2. Roundness gate: too strict at first; the real ball moving up close fits
+   at 2-3 deg. Set thresholds from measured data (real 1.8-3.1 vs phantoms
+   12-17), never from guesses.
+3. Biggest blob only: a big cardboard patch hid the real ball. Look at
+   several candidates.
+4. YOLO11s (pretrained): finds the ball and ignores cardboard, but misses a
+   ball cut off by the image edge, so colour is kept only for the touching
+   zone. Next: fine-tune YOLO on cut-off balls.
+
+**Localisation:** visual odometry can jump when the camera faces a plain
+wall. For a short game on a small floor, wheel odometry is the better tool:
+it drifts slowly and never jumps. Pick the sensor for the job.
+
+**Speed:** retrain for a new top speed rather than scaling actions on the
+robot. The 0.10 m/s fine-tune stopped the ball running away (run 7).
+
+**Tools that paid off:**
+- a dry-run mode;
+- saving a snapshot of every rejected detection (it showed the cardboard
+  box, the desk edge and the merged blob);
+- logging the detection source and the fit residual on every step;
+- odometry-jump and play-area stops.

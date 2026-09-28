@@ -1,0 +1,296 @@
+[INFO] [1790576624.863022764] [kaya_ball_policy]: policy loaded; goal mouth at [1.57 0.  ] m, into-box yaw 0 deg, width 0.46 m; LIVE - will drive
+[INFO] [1790576627.121258494] [kaya_ball_policy]: detector ready; colour lens in base_link at [0.024 0.024 0.138]
+[INFO] [1790576627.122996281] [kaya_ball_policy]: start pose in odom [-6986.324 -3312.914], yaw -176.0 deg (the robot must be ON THE MARK now)
+[INFO] [1790576627.126019136] [kaya_ball_policy]: t   0.0s robot (+0.00,+0.00) | ball never seen at (-7202.31,-2812.63) goal-frame (-7203.88,-2812.63) | action (-0.34,-0.17,+0.50) | det 0 ms fit 0.00 deg
+[INFO] [1790576627.641110797] [kaya_ball_policy]: t   0.5s robot (+0.00,-0.00) | ball SEEN at (+0.52,+0.01) goal-frame (-1.05,+0.01) | action (+1.00,+0.70,-0.87) | det 69 ms fit 0.59 deg
+[INFO] [1790576627.645488290] [kaya_ball_policy]: t   0.5s robot (+0.00,-0.00) | ball SEEN at (+0.52,+0.01) goal-frame (-1.05,+0.01) | action (+1.00,+0.66,-0.81) | det 69 ms fit 0.59 deg
+[INFO] [1790576628.646532832] [kaya_ball_policy]: t   1.5s robot (+0.03,+0.01) | ball SEEN at (+0.33,+0.20) goal-frame (-1.24,+0.20) | action (+1.00,+1.00,-0.52) | det 63 ms fit 0.22 deg
+[INFO] [1790576628.649702315] [kaya_ball_policy]: t   1.5s robot (+0.03,+0.01) | ball SEEN at (+0.33,+0.20) goal-frame (-1.24,+0.20) | action (+1.00,+1.00,-0.43) | det 63 ms fit 0.22 deg
+[WARN] [1790576629.059068788] [kaya_ball_policy]: rejected (fit): fit 13.38 deg, area 6096 px
+[WARN] [1790576629.240140694] [kaya_ball_policy]: rejected (fit): fit 16.12 deg, area 5061 px
+[WARN] [1790576629.391725776] [kaya_ball_policy]: rejected (fit): fit 15.47 deg, area 6317 px
+[WARN] [1790576629.642510289] [kaya_ball_policy]: rejected (fit): fit 16.54 deg, area 6385 px
+[INFO] [1790576629.675654039] [kaya_ball_policy]: t   2.6s robot (+0.09,+0.01) | ball mem 0.8s at (+0.35,+0.14) goal-frame (-1.22,+0.14) | action (+0.57,+1.00,+0.26) | det 78 ms fit 0.15 deg
+[INFO] [1790576629.678330769] [kaya_ball_policy]: t   2.6s robot (+0.09,+0.01) | ball mem 0.8s at (+0.35,+0.14) goal-frame (-1.22,+0.14) | action (+0.72,+1.00,+0.29) | det 78 ms fit 0.15 deg
+[WARN] [1790576629.777554426] [kaya_ball_policy]: rejected (fit): fit 16.24 deg, area 6652 px
+[WARN] [1790576630.015366306] [kaya_ball_policy]: rejected (fit): fit 15.47 deg, area 6934 px
+[WARN] [1790576630.208907116] [kaya_ball_policy]: rejected (fit): fit 15.64 deg, area 8047 px
+[WARN] [1790576630.379169536] [kaya_ball_policy]: rejected (fit): fit 16.99 deg, area 12863 px
+[WARN] [1790576630.479386378] [kaya_ball_policy]: rejected (fit): fit 16.93 deg, area 12347 px
+[INFO] [1790576630.640346914] [kaya_ball_policy]: t   3.5s robot (+0.13,+0.01) | ball SEEN at (+0.65,+0.22) goal-frame (-0.92,+0.22) | action (+1.00,+1.00,-0.47) | det 75 ms fit 2.61 deg
+[INFO] [1790576630.643625906] [kaya_ball_policy]: t   3.5s robot (+0.13,+0.01) | ball SEEN at (+0.65,+0.22) goal-frame (-0.92,+0.22) | action (+1.00,+1.00,-0.56) | det 75 ms fit 2.61 deg
+[INFO] [1790576631.141294288] [kaya_ball_policy]: t   4.0s robot (+0.18,+0.02) | ball SEEN at (+0.38,+0.11) goal-frame (-1.19,+0.11) | action (+1.00,+1.00,-0.67) | det 74 ms fit 0.21 deg
+[INFO] [1790576631.144351767] [kaya_ball_policy]: t   4.0s robot (+0.18,+0.02) | ball SEEN at (+0.38,+0.11) goal-frame (-1.19,+0.11) | action (+1.00,+1.00,-0.71) | det 74 ms fit 0.21 deg
+[INFO] [1790576631.655171636] [kaya_ball_policy]: t   4.5s robot (+0.25,+0.02) | ball SEEN at (+0.43,-0.16) goal-frame (-1.14,-0.16) | action (+1.00,+1.00,+0.74) | det 76 ms fit 0.28 deg
+[INFO] [1790576631.658685323] [kaya_ball_policy]: t   4.5s robot (+0.25,+0.02) | ball SEEN at (+0.43,-0.16) goal-frame (-1.14,-0.16) | action (+0.96,+1.00,+0.82) | det 76 ms fit 0.28 deg
+[WARN] [1790576632.189448429] [kaya_ball_policy]: rejected (fit): fit 25.61 deg, area 31190 px
+[WARN] [1790576632.393579774] [kaya_ball_policy]: rejected (fit): fit 22.61 deg, area 36875 px
+[WARN] [1790576632.588240270] [kaya_ball_policy]: rejected (fit): fit 23.82 deg, area 41638 px
+[INFO] [1790576632.627676393] [kaya_ball_policy]: t   5.5s robot (+0.30,+0.01) | ball mem 0.6s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.95,-1.00,-0.93) | det 74 ms fit 0.14 deg
+[INFO] [1790576632.630554826] [kaya_ball_policy]: t   5.5s robot (+0.30,+0.01) | ball mem 0.7s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.90,-1.00,-0.97) | det 74 ms fit 0.14 deg
+[WARN] [1790576632.792024820] [kaya_ball_policy]: rejected (fit): fit 19.29 deg, area 34454 px
+[WARN] [1790576632.983663421] [kaya_ball_policy]: rejected (fit): fit 19.65 deg, area 31324 px
+[WARN] [1790576633.190459689] [kaya_ball_policy]: rejected (fit): fit 27.38 deg, area 48575 px
+[WARN] [1790576633.378468023] [kaya_ball_policy]: rejected (fit): fit 26.99 deg, area 78180 px
+[WARN] [1790576633.583092730] [kaya_ball_policy]: rejected (fit): fit 17.61 deg, area 63540 px
+[INFO] [1790576633.625278514] [kaya_ball_policy]: t   6.5s robot (+0.23,+0.01) | ball mem 1.6s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.05,+0.46,+0.52) | det 67 ms fit 0.14 deg
+[INFO] [1790576633.628041103] [kaya_ball_policy]: t   6.5s robot (+0.23,+0.01) | ball mem 1.6s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.01,+0.43,+0.51) | det 67 ms fit 0.14 deg
+[WARN] [1790576633.792678148] [kaya_ball_policy]: rejected (fit): fit 26.58 deg, area 91553 px
+[WARN] [1790576633.987060139] [kaya_ball_policy]: rejected (fit): fit 26.88 deg, area 103495 px
+[WARN] [1790576634.181465938] [kaya_ball_policy]: rejected (fit): fit 25.91 deg, area 115561 px
+[WARN] [1790576634.392734198] [kaya_ball_policy]: rejected (fit): fit 23.79 deg, area 100446 px
+[WARN] [1790576634.595675871] [kaya_ball_policy]: rejected (fit): fit 23.29 deg, area 22818 px
+[WARN] [1790576634.795851082] [kaya_ball_policy]: rejected (fit): fit 24.58 deg, area 34348 px
+[WARN] [1790576634.884291300] [kaya_ball_policy]: rejected (fit): fit 25.34 deg, area 36042 px
+[WARN] [1790576634.988921860] [kaya_ball_policy]: rejected (fit): fit 21.27 deg, area 22971 px
+[WARN] [1790576635.078484997] [kaya_ball_policy]: rejected (fit): fit 24.51 deg, area 27142 px
+[WARN] [1790576635.184418481] [kaya_ball_policy]: rejected (fit): fit 20.22 deg, area 22535 px
+[INFO] [1790576635.186712895] [kaya_ball_policy]: t   8.1s robot (+0.25,+0.01) | ball mem 3.2s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.02,-0.01,+0.53) | det 67 ms fit 0.14 deg
+[WARN] [1790576635.280126146] [kaya_ball_policy]: rejected (fit): fit 18.86 deg, area 27759 px
+[WARN] [1790576635.382265133] [kaya_ball_policy]: rejected (fit): fit 27.98 deg, area 57653 px
+[WARN] [1790576635.478457134] [kaya_ball_policy]: rejected (fit): fit 27.31 deg, area 81637 px
+[WARN] [1790576635.584182067] [kaya_ball_policy]: rejected (fit): fit 17.82 deg, area 39565 px
+[WARN] [1790576635.684716296] [kaya_ball_policy]: rejected (fit): fit 26.84 deg, area 80220 px
+[INFO] [1790576635.687098361] [kaya_ball_policy]: t   8.6s robot (+0.22,+0.00) | ball mem 3.7s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.01,+0.39,+1.00) | det 66 ms fit 0.14 deg
+[INFO] [1790576635.721285441] [kaya_ball_policy]: t   8.6s robot (+0.22,+0.01) | ball mem 3.7s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.20,+0.32,+1.00) | det 66 ms fit 0.14 deg
+[WARN] [1790576635.901736079] [kaya_ball_policy]: rejected (fit): fit 21.23 deg, area 54748 px
+[WARN] [1790576636.089890562] [kaya_ball_policy]: rejected (fit): fit 25.19 deg, area 52266 px
+[WARN] [1790576636.182244961] [kaya_ball_policy]: rejected (fit): fit 23.42 deg, area 32705 px
+[INFO] [1790576636.184498990] [kaya_ball_policy]: t   9.1s robot (+0.24,+0.01) | ball mem 4.2s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.10,-1.00,-0.57) | det 67 ms fit 0.14 deg
+[WARN] [1790576636.280322595] [kaya_ball_policy]: rejected (fit): fit 19.42 deg, area 27739 px
+[WARN] [1790576636.392219865] [kaya_ball_policy]: rejected (fit): fit 22.64 deg, area 31368 px
+[WARN] [1790576636.590195770] [kaya_ball_policy]: rejected (fit): fit 23.38 deg, area 33806 px
+[WARN] [1790576636.685463420] [kaya_ball_policy]: rejected (fit): fit 24.89 deg, area 34553 px
+[INFO] [1790576636.687870637] [kaya_ball_policy]: t   9.6s robot (+0.23,+0.00) | ball mem 4.7s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.17,-0.82,-1.00) | det 67 ms fit 0.14 deg
+[WARN] [1790576636.778979138] [kaya_ball_policy]: rejected (fit): fit 26.57 deg, area 35185 px
+[WARN] [1790576636.887314688] [kaya_ball_policy]: rejected (fit): fit 26.54 deg, area 37025 px
+[WARN] [1790576636.988435848] [kaya_ball_policy]: rejected (fit): fit 27.79 deg, area 38124 px
+[WARN] [1790576637.194545405] [kaya_ball_policy]: rejected (fit): fit 16.67 deg, area 40924 px
+[INFO] [1790576637.197052146] [kaya_ball_policy]: t  10.1s robot (+0.18,-0.00) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.40,+0.42,+0.42) | det 66 ms fit 0.14 deg
+[INFO] [1790576637.221022688] [kaya_ball_policy]: t  10.1s robot (+0.17,-0.00) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.51,+0.45,+0.39) | det 66 ms fit 0.14 deg
+[WARN] [1790576637.381296481] [kaya_ball_policy]: rejected (fit): fit 15.70 deg, area 38227 px
+[WARN] [1790576637.581141121] [kaya_ball_policy]: rejected (fit): fit 15.41 deg, area 37075 px
+[WARN] [1790576637.681016351] [kaya_ball_policy]: rejected (fit): fit 11.91 deg, area 28653 px
+[INFO] [1790576637.683305421] [kaya_ball_policy]: t  10.6s robot (+0.18,+0.00) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.15,+0.50,+0.87) | det 66 ms fit 0.14 deg
+[INFO] [1790576637.721118832] [kaya_ball_policy]: t  10.6s robot (+0.19,+0.00) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.14,+0.44,+1.00) | det 66 ms fit 0.14 deg
+[WARN] [1790576637.883850308] [kaya_ball_policy]: rejected (fit): fit 21.71 deg, area 39342 px
+[WARN] [1790576637.981702622] [kaya_ball_policy]: rejected (fit): fit 25.25 deg, area 86440 px
+[WARN] [1790576638.080656733] [kaya_ball_policy]: rejected (fit): fit 24.80 deg, area 87251 px
+[WARN] [1790576638.186338401] [kaya_ball_policy]: rejected (fit): fit 23.01 deg, area 24621 px
+[INFO] [1790576638.188813333] [kaya_ball_policy]: t  11.1s robot (+0.21,+0.00) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.01,-1.00,-0.25) | det 66 ms fit 0.14 deg
+[WARN] [1790576638.281515328] [kaya_ball_policy]: rejected (fit): fit 20.35 deg, area 23704 px
+[WARN] [1790576638.404697845] [kaya_ball_policy]: rejected (fit): fit 22.22 deg, area 27838 px
+[WARN] [1790576638.487580115] [kaya_ball_policy]: rejected (fit): fit 22.14 deg, area 30849 px
+[WARN] [1790576638.583672113] [kaya_ball_policy]: rejected (fit): fit 22.57 deg, area 32204 px
+[WARN] [1790576638.678801838] [kaya_ball_policy]: rejected (fit): fit 23.25 deg, area 33673 px
+[INFO] [1790576638.681064891] [kaya_ball_policy]: t  11.6s robot (+0.20,+0.00) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.14,-0.83,-1.00) | det 66 ms fit 0.14 deg
+[WARN] [1790576638.815207109] [kaya_ball_policy]: rejected (fit): fit 24.69 deg, area 33758 px
+[WARN] [1790576638.892538054] [kaya_ball_policy]: rejected (fit): fit 24.61 deg, area 29386 px
+[WARN] [1790576639.179442481] [kaya_ball_policy]: rejected (fit): fit 27.11 deg, area 38444 px
+[INFO] [1790576639.181668925] [kaya_ball_policy]: t  12.1s robot (+0.16,-0.01) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.08,+0.11,+0.39) | det 67 ms fit 0.14 deg
+[WARN] [1790576639.276348971] [kaya_ball_policy]: rejected (fit): fit 27.66 deg, area 48199 px
+[WARN] [1790576639.384127701] [kaya_ball_policy]: rejected (fit): fit 26.63 deg, area 98011 px
+[WARN] [1790576639.484446051] [kaya_ball_policy]: rejected (fit): fit 26.41 deg, area 68141 px
+[WARN] [1790576639.581089747] [kaya_ball_policy]: rejected (fit): fit 16.73 deg, area 39614 px
+[WARN] [1790576639.779729642] [kaya_ball_policy]: rejected (fit): fit 14.96 deg, area 30901 px
+[WARN] [1790576639.981587855] [kaya_ball_policy]: rejected (fit): fit 25.08 deg, area 66857 px
+[WARN] [1790576640.086510841] [kaya_ball_policy]: rejected (fit): fit 25.05 deg, area 44559 px
+[WARN] [1790576640.181451983] [kaya_ball_policy]: rejected (fit): fit 24.68 deg, area 68780 px
+[INFO] [1790576640.183698588] [kaya_ball_policy]: t  13.1s robot (+0.17,-0.01) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.37,-0.47,+0.89) | det 66 ms fit 0.14 deg
+[WARN] [1790576640.279209830] [kaya_ball_policy]: rejected (fit): fit 24.54 deg, area 77551 px
+[WARN] [1790576640.391080380] [kaya_ball_policy]: rejected (fit): fit 22.67 deg, area 30286 px
+[WARN] [1790576640.485073202] [kaya_ball_policy]: rejected (fit): fit 22.05 deg, area 28884 px
+[WARN] [1790576640.578817601] [kaya_ball_policy]: rejected (fit): fit 21.63 deg, area 28121 px
+[WARN] [1790576640.696207730] [kaya_ball_policy]: rejected (fit): fit 21.73 deg, area 30182 px
+[INFO] [1790576640.698850923] [kaya_ball_policy]: t  13.6s robot (+0.18,-0.01) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.05,-0.86,-0.88) | det 67 ms fit 0.14 deg
+[WARN] [1790576640.783217179] [kaya_ball_policy]: rejected (fit): fit 22.27 deg, area 31322 px
+[WARN] [1790576640.879658885] [kaya_ball_policy]: rejected (fit): fit 23.30 deg, area 30775 px
+[WARN] [1790576640.976469595] [kaya_ball_policy]: rejected (fit): fit 24.76 deg, area 29624 px
+[WARN] [1790576641.090302708] [kaya_ball_policy]: rejected (fit): fit 24.73 deg, area 31965 px
+[WARN] [1790576641.181825366] [kaya_ball_policy]: rejected (fit): fit 26.05 deg, area 32178 px
+[INFO] [1790576641.184047714] [kaya_ball_policy]: t  14.1s robot (+0.14,-0.02) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.46,-0.69,-0.82) | det 64 ms fit 0.14 deg
+[WARN] [1790576641.278280321] [kaya_ball_policy]: rejected (fit): fit 26.15 deg, area 32013 px
+[WARN] [1790576641.380124322] [kaya_ball_policy]: rejected (fit): fit 25.84 deg, area 40010 px
+[WARN] [1790576641.579349709] [kaya_ball_policy]: rejected (fit): fit 24.60 deg, area 64472 px
+[WARN] [1790576641.683243092] [kaya_ball_policy]: rejected (fit): fit 18.34 deg, area 30808 px
+[INFO] [1790576641.685822347] [kaya_ball_policy]: t  14.6s robot (+0.12,-0.02) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.50,+0.51,+0.43) | det 63 ms fit 0.14 deg
+[WARN] [1790576641.782951372] [kaya_ball_policy]: rejected (fit): fit 12.76 deg, area 28007 px
+[WARN] [1790576641.981993041] [kaya_ball_policy]: rejected (fit): fit 17.86 deg, area 29857 px
+[WARN] [1790576642.083226302] [kaya_ball_policy]: rejected (fit): fit 14.59 deg, area 23283 px
+[WARN] [1790576642.185789623] [kaya_ball_policy]: rejected (fit): fit 23.61 deg, area 46647 px
+[INFO] [1790576642.188026051] [kaya_ball_policy]: t  15.1s robot (+0.15,-0.02) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.08,+0.51,+1.00) | det 64 ms fit 0.14 deg
+[WARN] [1790576642.283100735] [kaya_ball_policy]: rejected (fit): fit 20.58 deg, area 25479 px
+[WARN] [1790576642.385147111] [kaya_ball_policy]: rejected (fit): fit 23.59 deg, area 69030 px
+[WARN] [1790576642.482909757] [kaya_ball_policy]: rejected (fit): fit 23.56 deg, area 67158 px
+[WARN] [1790576642.580365546] [kaya_ball_policy]: rejected (fit): fit 20.86 deg, area 76939 px
+[WARN] [1790576642.679958046] [kaya_ball_policy]: rejected (fit): fit 21.47 deg, area 54986 px
+[INFO] [1790576642.682211051] [kaya_ball_policy]: t  15.6s robot (+0.16,-0.02) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (+0.07,-0.86,-0.66) | det 63 ms fit 0.14 deg
+[WARN] [1790576642.780806206] [kaya_ball_policy]: rejected (fit): fit 21.18 deg, area 50005 px
+[WARN] [1790576642.883376184] [kaya_ball_policy]: rejected (fit): fit 15.36 deg, area 23064 px
+[WARN] [1790576642.979960518] [kaya_ball_policy]: rejected (fit): fit 21.64 deg, area 42170 px
+[WARN] [1790576643.079705728] [kaya_ball_policy]: rejected (fit): fit 23.02 deg, area 42751 px
+[WARN] [1790576643.179434170] [kaya_ball_policy]: rejected (fit): fit 23.79 deg, area 37938 px
+[INFO] [1790576643.181763145] [kaya_ball_policy]: t  16.1s robot (+0.13,-0.03) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.19,-0.72,-1.00) | det 63 ms fit 0.14 deg
+[WARN] [1790576643.287123553] [kaya_ball_policy]: rejected (fit): fit 14.10 deg, area 18667 px
+[WARN] [1790576643.381574024] [kaya_ball_policy]: rejected (fit): fit 23.54 deg, area 39498 px
+[WARN] [1790576643.485278120] [kaya_ball_policy]: rejected (fit): fit 23.46 deg, area 43028 px
+[WARN] [1790576643.578719436] [kaya_ball_policy]: rejected (fit): fit 23.17 deg, area 38480 px
+[WARN] [1790576643.676372223] [kaya_ball_policy]: rejected (fit): fit 23.98 deg, area 35129 px
+[INFO] [1790576643.678762256] [kaya_ball_policy]: t  16.6s robot (+0.09,-0.03) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.55,+0.45,+0.19) | det 63 ms fit 0.14 deg
+[WARN] [1790576643.778960922] [kaya_ball_policy]: rejected (fit): fit 23.53 deg, area 57204 px
+[WARN] [1790576643.982011814] [kaya_ball_policy]: rejected (fit): fit 23.65 deg, area 53286 px
+[WARN] [1790576644.078576180] [kaya_ball_policy]: rejected (fit): fit 20.82 deg, area 19865 px
+[WARN] [1790576644.178322030] [kaya_ball_policy]: rejected (fit): fit 23.33 deg, area 58118 px
+[INFO] [1790576644.180705375] [kaya_ball_policy]: t  17.1s robot (+0.09,-0.03) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.46,+0.53,+0.47) | det 62 ms fit 0.14 deg
+[INFO] [1790576644.221559082] [kaya_ball_policy]: t  17.1s robot (+0.11,-0.03) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.36,+0.53,+0.62) | det 62 ms fit 0.14 deg
+[WARN] [1790576644.484498024] [kaya_ball_policy]: rejected (fit): fit 23.08 deg, area 49943 px
+[WARN] [1790576644.583472712] [kaya_ball_policy]: rejected (fit): fit 23.15 deg, area 45606 px
+[WARN] [1790576644.783086976] [kaya_ball_policy]: rejected (fit): fit 23.13 deg, area 55249 px
+[WARN] [1790576644.980039358] [kaya_ball_policy]: rejected (fit): fit 22.12 deg, area 48936 px
+[WARN] [1790576645.080364555] [kaya_ball_policy]: rejected (fit): fit 21.25 deg, area 45574 px
+[WARN] [1790576645.182487926] [kaya_ball_policy]: rejected (fit): fit 21.30 deg, area 40431 px
+[INFO] [1790576645.184778532] [kaya_ball_policy]: t  18.1s robot (+0.15,-0.03) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.02,-0.88,-0.69) | det 62 ms fit 0.14 deg
+[WARN] [1790576645.282178670] [kaya_ball_policy]: rejected (fit): fit 18.60 deg, area 33615 px
+[WARN] [1790576645.385056755] [kaya_ball_policy]: rejected (fit): fit 21.94 deg, area 37417 px
+[WARN] [1790576645.591221353] [kaya_ball_policy]: rejected (fit): fit 20.30 deg, area 18796 px
+[WARN] [1790576645.690124294] [kaya_ball_policy]: rejected (fit): fit 12.73 deg, area 10782 px
+[INFO] [1790576645.692700414] [kaya_ball_policy]: t  18.6s robot (+0.11,-0.04) | ball mem 5.0s at (+0.31,-0.26) goal-frame (-1.26,-0.26) | action (-0.33,-0.61,-1.00) | det 63 ms fit 0.14 deg
+[WARN] [1790576645.789607640] [kaya_ball_policy]: rejected (fit): fit 11.73 deg, area 12114 px
+[WARN] [1790576645.889450421] [kaya_ball_policy]: rejected (fit): fit 11.77 deg, area 4992 px
+[WARN] [1790576645.985410030] [kaya_ball_policy]: rejected (fit): fit 17.52 deg, area 7408 px
+[INFO] [1790576646.142184856] [kaya_ball_policy]: t  19.0s robot (+0.10,-0.04) | ball SEEN at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (+0.94,+0.22,+1.00) | det 63 ms fit 0.62 deg
+[INFO] [1790576646.145605612] [kaya_ball_policy]: t  19.0s robot (+0.10,-0.04) | ball SEEN at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (+1.00,+0.36,+1.00) | det 63 ms fit 0.62 deg
+[WARN] [1790576646.286381751] [kaya_ball_policy]: rejected (fit): fit 21.87 deg, area 45656 px
+[WARN] [1790576646.380118597] [kaya_ball_policy]: rejected (fit): fit 20.91 deg, area 39009 px
+[WARN] [1790576646.481965159] [kaya_ball_policy]: rejected (fit): fit 20.43 deg, area 34696 px
+[WARN] [1790576646.581153838] [kaya_ball_policy]: rejected (fit): fit 21.14 deg, area 42859 px
+[WARN] [1790576646.684040370] [kaya_ball_policy]: rejected (fit): fit 22.30 deg, area 46544 px
+[INFO] [1790576646.686530759] [kaya_ball_policy]: t  19.6s robot (+0.11,-0.04) | ball mem 0.5s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (+0.67,-1.00,-1.00) | det 64 ms fit 0.62 deg
+[WARN] [1790576646.781190196] [kaya_ball_policy]: rejected (fit): fit 21.69 deg, area 51244 px
+[WARN] [1790576647.007563065] [kaya_ball_policy]: rejected (fit): fit 22.22 deg, area 50631 px
+[WARN] [1790576647.078119284] [kaya_ball_policy]: rejected (fit): fit 20.10 deg, area 21907 px
+[INFO] [1790576647.221256591] [kaya_ball_policy]: t  20.1s robot (+0.10,-0.05) | ball mem 1.1s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (+0.75,-0.75,+0.01) | det 65 ms fit 0.62 deg
+[WARN] [1790576647.382915166] [kaya_ball_policy]: rejected (fit): fit 21.55 deg, area 43828 px
+[WARN] [1790576647.487194514] [kaya_ball_policy]: rejected (fit): fit 21.02 deg, area 53217 px
+[WARN] [1790576647.582565912] [kaya_ball_policy]: rejected (fit): fit 22.16 deg, area 59960 px
+[WARN] [1790576647.785757129] [kaya_ball_policy]: rejected (fit): fit 20.74 deg, area 34579 px
+[WARN] [1790576647.883321593] [kaya_ball_policy]: rejected (fit): fit 21.64 deg, area 33449 px
+[WARN] [1790576647.985022038] [kaya_ball_policy]: rejected (fit): fit 22.74 deg, area 48290 px
+[WARN] [1790576648.084313248] [kaya_ball_policy]: rejected (fit): fit 21.74 deg, area 56016 px
+[WARN] [1790576648.180278874] [kaya_ball_policy]: rejected (fit): fit 22.20 deg, area 61697 px
+[INFO] [1790576648.182532903] [kaya_ball_policy]: t  21.1s robot (+0.10,-0.04) | ball mem 2.0s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (-1.00,-1.00,-1.00) | det 65 ms fit 0.62 deg
+[WARN] [1790576648.282464935] [kaya_ball_policy]: rejected (fit): fit 22.30 deg, area 52389 px
+[WARN] [1790576648.382999804] [kaya_ball_policy]: rejected (fit): fit 22.47 deg, area 46137 px
+[WARN] [1790576648.482991134] [kaya_ball_policy]: rejected (fit): fit 22.47 deg, area 46756 px
+[WARN] [1790576648.581948605] [kaya_ball_policy]: rejected (fit): fit 21.57 deg, area 52963 px
+[INFO] [1790576648.721217621] [kaya_ball_policy]: t  21.6s robot (+0.07,-0.04) | ball mem 2.6s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (+0.55,+0.39,+1.00) | det 64 ms fit 0.62 deg
+[WARN] [1790576648.986006545] [kaya_ball_policy]: rejected (fit): fit 20.32 deg, area 45371 px
+[WARN] [1790576649.182634244] [kaya_ball_policy]: rejected (fit): fit 20.62 deg, area 23604 px
+[INFO] [1790576649.184952083] [kaya_ball_policy]: t  22.1s robot (+0.06,-0.04) | ball mem 3.0s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (-0.05,-1.00,-1.00) | det 64 ms fit 0.62 deg
+[WARN] [1790576649.287319142] [kaya_ball_policy]: rejected (fit): fit 17.37 deg, area 35029 px
+[WARN] [1790576649.384638222] [kaya_ball_policy]: rejected (fit): fit 21.44 deg, area 49726 px
+[WARN] [1790576649.486690678] [kaya_ball_policy]: rejected (fit): fit 21.74 deg, area 50538 px
+[WARN] [1790576649.581562826] [kaya_ball_policy]: rejected (fit): fit 21.36 deg, area 47942 px
+[WARN] [1790576649.684899742] [kaya_ball_policy]: rejected (fit): fit 21.99 deg, area 43720 px
+[INFO] [1790576649.687246254] [kaya_ball_policy]: t  22.6s robot (+0.06,-0.05) | ball mem 3.5s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (-1.00,-1.00,-1.00) | det 64 ms fit 0.62 deg
+[WARN] [1790576649.782828699] [kaya_ball_policy]: rejected (fit): fit 20.81 deg, area 45068 px
+[WARN] [1790576650.005557795] [kaya_ball_policy]: rejected (fit): fit 20.40 deg, area 46278 px
+[WARN] [1790576650.216079342] [kaya_ball_policy]: rejected (fit): fit 19.35 deg, area 35563 px
+[INFO] [1790576650.218559906] [kaya_ball_policy]: t  23.1s robot (-0.05,-0.09) | ball mem 4.1s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (+0.24,+0.24,+1.00) | det 67 ms fit 0.62 deg
+[INFO] [1790576650.221173947] [kaya_ball_policy]: t  23.1s robot (-0.05,-0.09) | ball mem 4.1s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (+0.22,+0.29,+1.00) | det 67 ms fit 0.62 deg
+[WARN] [1790576650.398446813] [kaya_ball_policy]: rejected (fit): fit 11.90 deg, area 29992 px
+[WARN] [1790576650.484303263] [kaya_ball_policy]: rejected (fit): fit 8.73 deg, area 22662 px
+[WARN] [1790576650.696675208] [kaya_ball_policy]: rejected (fit): fit 15.58 deg, area 27540 px
+[INFO] [1790576650.699071098] [kaya_ball_policy]: t  23.6s robot (-0.06,-0.09) | ball mem 4.6s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (+0.48,-1.00,-1.00) | det 68 ms fit 0.62 deg
+[INFO] [1790576650.721158919] [kaya_ball_policy]: t  23.6s robot (-0.06,-0.09) | ball mem 4.6s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (-1.00,-1.00,-1.00) | det 68 ms fit 0.62 deg
+[WARN] [1790576650.892272824] [kaya_ball_policy]: rejected (fit): fit 7.12 deg, area 12482 px
+[WARN] [1790576650.979850709] [kaya_ball_policy]: rejected (fit): fit 12.24 deg, area 21319 px
+[WARN] [1790576651.081353259] [kaya_ball_policy]: rejected (fit): fit 17.01 deg, area 28592 px
+[WARN] [1790576651.183568281] [kaya_ball_policy]: rejected (fit): fit 18.67 deg, area 31546 px
+[INFO] [1790576651.185842758] [kaya_ball_policy]: t  24.1s robot (-0.08,-0.09) | ball mem 5.0s at (-0.46,-0.94) goal-frame (-2.03,-0.94) | action (+0.71,-0.57,-0.32) | det 68 ms fit 0.62 deg
+[WARN] [1790576651.278524336] [kaya_ball_policy]: rejected (fit): fit 7.52 deg, area 27289 px
+[WARN] [1790576651.485345821] [kaya_ball_policy]: rejected (fit): fit 9.30 deg, area 19379 px
+[WARN] [1790576651.577058118] [kaya_ball_policy]: rejected (fit): fit 5.25 deg, area 15234 px
+[WARN] [1790576651.882798705] [kaya_ball_policy]: rejected (fit): fit 6.38 deg, area 15155 px
+[WARN] [1790576651.978312443] [kaya_ball_policy]: rejected (fit): fit 6.65 deg, area 17327 px
+[WARN] [1790576652.088633980] [kaya_ball_policy]: rejected (fit): fit 16.52 deg, area 24077 px
+[WARN] [1790576652.288344472] [kaya_ball_policy]: rejected (fit): fit 9.24 deg, area 23595 px
+[WARN] [1790576652.378692787] [kaya_ball_policy]: rejected (fit): fit 7.97 deg, area 20881 px
+[WARN] [1790576652.481562274] [kaya_ball_policy]: rejected (fit): fit 7.08 deg, area 21011 px
+[INFO] [1790576652.644169690] [kaya_ball_policy]: t  25.5s robot (-0.13,-0.10) | ball SEEN at (-0.29,-0.91) goal-frame (-1.86,-0.91) | action (+1.00,+0.14,+1.00) | det 67 ms fit 4.94 deg
+[INFO] [1790576652.646723955] [kaya_ball_policy]: t  25.5s robot (-0.13,-0.10) | ball SEEN at (-0.29,-0.91) goal-frame (-1.86,-0.91) | action (+1.00,+0.25,+1.00) | det 67 ms fit 4.94 deg
+[WARN] [1790576653.882669617] [kaya_ball_policy]: rejected (fit): fit 5.65 deg, area 16748 px
+[WARN] [1790576653.977926160] [kaya_ball_policy]: rejected (fit): fit 5.61 deg, area 17072 px
+[WARN] [1790576654.079524906] [kaya_ball_policy]: rejected (fit): fit 5.70 deg, area 18216 px
+[WARN] [1790576654.188694314] [kaya_ball_policy]: rejected (fit): fit 12.99 deg, area 22761 px
+[INFO] [1790576654.190995642] [kaya_ball_policy]: t  27.1s robot (-0.13,-0.11) | ball mem 0.4s at (+0.39,-0.13) goal-frame (-1.18,-0.13) | action (+0.99,+1.00,-0.37) | det 64 ms fit 4.83 deg
+[WARN] [1790576654.280216392] [kaya_ball_policy]: rejected (fit): fit 14.84 deg, area 23535 px
+[WARN] [1790576654.378423469] [kaya_ball_policy]: rejected (fit): fit 16.36 deg, area 30253 px
+[WARN] [1790576654.480194605] [kaya_ball_policy]: rejected (fit): fit 17.31 deg, area 31709 px
+[WARN] [1790576654.584628329] [kaya_ball_policy]: rejected (fit): fit 20.10 deg, area 44930 px
+[WARN] [1790576654.679597534] [kaya_ball_policy]: rejected (fit): fit 20.60 deg, area 53140 px
+[INFO] [1790576654.681934383] [kaya_ball_policy]: t  27.6s robot (-0.12,-0.11) | ball mem 0.9s at (+0.39,-0.13) goal-frame (-1.18,-0.13) | action (+0.79,+1.00,-0.08) | det 64 ms fit 4.83 deg
+[WARN] [1790576654.784216865] [kaya_ball_policy]: rejected (fit): fit 21.01 deg, area 58807 px
+[WARN] [1790576654.884185794] [kaya_ball_policy]: rejected (fit): fit 21.81 deg, area 58277 px
+[WARN] [1790576655.084723771] [kaya_ball_policy]: rejected (fit): fit 22.15 deg, area 76947 px
+[WARN] [1790576655.183168840] [kaya_ball_policy]: rejected (fit): fit 20.61 deg, area 63740 px
+[INFO] [1790576655.185601020] [kaya_ball_policy]: t  28.1s robot (-0.09,-0.10) | ball mem 1.4s at (+0.39,-0.13) goal-frame (-1.18,-0.13) | action (+0.96,+1.00,+0.42) | det 64 ms fit 4.83 deg
+[WARN] [1790576655.282693402] [kaya_ball_policy]: rejected (fit): fit 22.45 deg, area 83067 px
+[WARN] [1790576655.485192983] [kaya_ball_policy]: rejected (fit): fit 23.01 deg, area 116655 px
+[WARN] [1790576655.587821301] [kaya_ball_policy]: rejected (fit): fit 22.39 deg, area 108514 px
+[WARN] [1790576655.682227766] [kaya_ball_policy]: rejected (fit): fit 22.74 deg, area 99975 px
+[INFO] [1790576655.684546054] [kaya_ball_policy]: t  28.6s robot (-0.07,-0.10) | ball mem 1.9s at (+0.39,-0.13) goal-frame (-1.18,-0.13) | action (+0.53,+1.00,+0.95) | det 64 ms fit 4.83 deg
+[INFO] [1790576655.721423938] [kaya_ball_policy]: t  28.6s robot (-0.07,-0.10) | ball mem 2.0s at (+0.39,-0.13) goal-frame (-1.18,-0.13) | action (+0.51,+0.98,+1.00) | det 64 ms fit 4.83 deg
+[WARN] [1790576655.889520728] [kaya_ball_policy]: rejected (fit): fit 21.12 deg, area 97853 px
+[WARN] [1790576655.982174301] [kaya_ball_policy]: rejected (fit): fit 19.64 deg, area 62821 px
+[WARN] [1790576656.081925367] [kaya_ball_policy]: rejected (fit): fit 18.40 deg, area 49506 px
+[WARN] [1790576656.180836628] [kaya_ball_policy]: rejected (fit): fit 18.61 deg, area 47220 px
+[INFO] [1790576656.183344107] [kaya_ball_policy]: t  29.1s robot (-0.02,-0.09) | ball mem 2.4s at (+0.39,-0.13) goal-frame (-1.18,-0.13) | action (+0.25,+0.70,+1.00) | det 63 ms fit 4.83 deg
+[WARN] [1790576656.284234957] [kaya_ball_policy]: rejected (fit): fit 15.68 deg, area 52193 px
+[WARN] [1790576656.380421388] [kaya_ball_policy]: rejected (fit): fit 15.22 deg, area 36277 px
+[WARN] [1790576656.502090140] [kaya_ball_policy]: rejected (fit): fit 15.06 deg, area 25477 px
+[WARN] [1790576656.797210716] [kaya_ball_policy]: rejected (fit): fit 17.53 deg, area 297 px
+[WARN] [1790576657.001872899] [kaya_ball_policy]: rejected (fit): fit 5.71 deg, area 1656 px
+[WARN] [1790576657.067812236] [kaya_ball_policy]: rejected (fit): fit 5.16 deg, area 793 px
+[WARN] [1790576657.263370200] [kaya_ball_policy]: rejected (fit): fit 5.18 deg, area 959 px
+[WARN] [1790576657.437004750] [kaya_ball_policy]: rejected (outside): fit 4.28 deg, area 957 px at start-frame (+4.69,+2.71)
+[WARN] [1790576657.578146848] [kaya_ball_policy]: rejected (outside): fit 4.76 deg, area 1046 px at start-frame (+4.68,+2.70)
+[WARN] [1790576657.686534597] [kaya_ball_policy]: rejected (fit): fit 5.95 deg, area 1575 px
+[INFO] [1790576657.688802675] [kaya_ball_policy]: t  30.6s robot (+0.03,-0.10) | ball mem 3.9s at (+0.39,-0.13) goal-frame (-1.18,-0.13) | action (-0.92,-0.56,-1.00) | det 79 ms fit 4.83 deg
+[WARN] [1790576657.838828665] [kaya_ball_policy]: rejected (outside): fit 4.66 deg, area 1414 px at start-frame (+4.63,+3.01)
+[WARN] [1790576658.048412426] [kaya_ball_policy]: rejected (outside): fit 4.66 deg, area 1746 px at start-frame (+4.57,+3.37)
+[INFO] [1790576658.641094814] [kaya_ball_policy]: t  31.5s robot (-0.07,-0.13) | ball SEEN at (+0.43,-0.33) goal-frame (-1.14,-0.33) | action (+0.84,-1.00,+1.00) | det 78 ms fit 0.89 deg
+[INFO] [1790576658.643573012] [kaya_ball_policy]: t  31.5s robot (-0.07,-0.13) | ball SEEN at (+0.43,-0.33) goal-frame (-1.14,-0.33) | action (+0.84,-1.00,+1.00) | det 78 ms fit 0.89 deg
+[WARN] [1790576659.271677202] [kaya_ball_policy]: rejected (outside): fit 4.49 deg, area 1389 px at start-frame (+4.58,+3.06)
+[INFO] [1790576660.671061317] [kaya_ball_policy]: t  33.5s robot (+0.05,-0.14) | ball SEEN at (+0.20,-0.26) goal-frame (-1.37,-0.26) | action (+1.00,-1.00,+0.22) | det 67 ms fit 1.14 deg
+[INFO] [1790576660.675511903] [kaya_ball_policy]: t  33.6s robot (+0.05,-0.14) | ball SEEN at (+0.20,-0.26) goal-frame (-1.37,-0.26) | action (+1.00,-1.00,+0.20) | det 67 ms fit 1.14 deg
+[INFO] [1790576661.206177074] [kaya_ball_policy]: t  34.1s robot (+0.14,-0.14) | ball SEEN at (+0.59,-0.34) goal-frame (-0.98,-0.34) | action (+1.00,-1.00,+0.35) | det 65 ms fit 1.93 deg
+[INFO] [1790576661.221477955] [kaya_ball_policy]: t  34.1s robot (+0.14,-0.14) | ball SEEN at (+0.59,-0.34) goal-frame (-0.98,-0.34) | action (+1.00,-1.00,+0.41) | det 65 ms fit 1.93 deg
+[INFO] [1790576661.687103565] [kaya_ball_policy]: t  34.6s robot (+0.17,-0.13) | ball SEEN at (+0.34,-0.25) goal-frame (-1.23,-0.25) | action (+1.00,-1.00,+0.50) | det 66 ms fit 0.14 deg
+[INFO] [1790576662.222897585] [kaya_ball_policy]: t  35.1s robot (+0.21,-0.13) | ball SEEN at (+0.41,-0.27) goal-frame (-1.16,-0.27) | action (+1.00,-1.00,+0.23) | det 67 ms fit 1.17 deg
+[INFO] [1790576662.664980237] [kaya_ball_policy]: t  35.5s robot (+0.22,-0.13) | ball SEEN at (+0.57,-0.30) goal-frame (-1.00,-0.30) | action (+1.00,-1.00,+0.41) | det 69 ms fit 1.31 deg
+[INFO] [1790576662.669898391] [kaya_ball_policy]: t  35.5s robot (+0.22,-0.13) | ball SEEN at (+0.57,-0.30) goal-frame (-1.00,-0.30) | action (+1.00,-1.00,+0.43) | det 69 ms fit 1.31 deg
+[INFO] [1790576663.204483057] [kaya_ball_policy]: t  36.1s robot (+0.34,-0.12) | ball SEEN at (+0.61,-0.26) goal-frame (-0.96,-0.26) | action (+1.00,-1.00,+0.12) | det 71 ms fit 0.89 deg
+[INFO] [1790576663.659029276] [kaya_ball_policy]: t  36.5s robot (+0.40,-0.10) | ball SEEN at (+0.62,-0.20) goal-frame (-0.95,-0.20) | action (+1.00,-1.00,+0.26) | det 71 ms fit 0.55 deg
+[INFO] [1790576663.662378928] [kaya_ball_policy]: t  36.5s robot (+0.40,-0.10) | ball SEEN at (+0.62,-0.20) goal-frame (-0.95,-0.20) | action (+1.00,-1.00,+0.19) | det 71 ms fit 0.55 deg
+[INFO] [1790576664.701036038] [kaya_ball_policy]: t  37.6s robot (+0.49,-0.10) | ball SEEN at (+0.65,-0.17) goal-frame (-0.92,-0.17) | action (+1.00,-1.00,+0.12) | det 72 ms fit 0.39 deg
+[WARN] [1790576665.481060010] [kaya_ball_policy]: rejected (fit): fit 19.57 deg, area 45448 px
+[WARN] [1790576665.700290601] [kaya_ball_policy]: rejected (fit): fit 21.99 deg, area 64189 px
+[INFO] [1790576665.702540567] [kaya_ball_policy]: t  38.6s robot (+0.56,-0.11) | ball mem 0.3s at (+0.74,-0.15) goal-frame (-0.83,-0.15) | action (+1.00,-1.00,+0.03) | det 73 ms fit 1.52 deg
+[WARN] [1790576665.779561055] [kaya_ball_policy]: rejected (fit): fit 22.55 deg, area 68065 px
+[WARN] [1790576665.881205979] [kaya_ball_policy]: rejected (fit): fit 25.81 deg, area 117823 px
+[WARN] [1790576666.084407983] [kaya_ball_policy]: rejected (fit): fit 24.11 deg, area 120932 px
+[WARN] [1790576666.200323065] [kaya_ball_policy]: rejected (fit): fit 22.79 deg, area 116442 px
+[INFO] [1790576666.202979925] [kaya_ball_policy]: t  39.1s robot (+0.58,-0.11) | ball mem 0.8s at (+0.74,-0.15) goal-frame (-0.83,-0.15) | action (+1.00,-0.98,-0.59) | det 71 ms fit 1.52 deg
+[WARN] [1790576666.281900254] [kaya_ball_policy]: rejected (fit): fit 20.16 deg, area 69110 px
+[WARN] [1790576666.379409035] [kaya_ball_policy]: rejected (fit): fit 22.55 deg, area 113528 px
+[WARN] [1790576666.497489311] [kaya_ball_policy]: rejected (fit): fit 22.03 deg, area 110732 px
+[WARN] [1790576666.698252448] [kaya_ball_policy]: rejected (fit): fit 21.94 deg, area 110762 px
+[INFO] [1790576666.700562895] [kaya_ball_policy]: t  39.6s robot (+0.58,-0.11) | ball mem 1.3s at (+0.74,-0.15) goal-frame (-0.83,-0.15) | action (+0.85,-0.30,-1.00) | det 71 ms fit 1.52 deg
+[WARN] [1790576666.780854697] [kaya_ball_policy]: rejected (fit): fit 21.90 deg, area 111966 px
+[WARN] [1790576666.881234105] [kaya_ball_policy]: rejected (fit): fit 22.85 deg, area 118352 px
+[WARN] [1790576666.980969778] [kaya_ball_policy]: rejected (fit): fit 23.45 deg, area 120419 px
+[WARN] [1790576667.079258746] [kaya_ball_policy]: rejected (fit): fit 22.27 deg, area 75956 px
+[WARN] [1790576667.184179687] [kaya_ball_policy]: rejected (fit): fit 26.75 deg, area 127475 px
+[INFO] [1790576667.186480215] [kaya_ball_policy]: t  40.1s robot (+0.58,-0.11) | ball mem 1.8s at (+0.74,-0.15) goal-frame (-0.83,-0.15) | action (-0.49,-0.58,-0.99) | det 69 ms fit 1.52 deg
+[WARN] [1790576667.187652735] [kaya_ball_policy]: STOP: time limit after 40.1 s (64 detections, rejected {'fit': 206, 'outside': 5})

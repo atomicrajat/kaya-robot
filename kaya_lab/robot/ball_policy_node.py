@@ -77,6 +77,11 @@ class BallPolicyNode(Node):
         self.dry_run = P("dry_run", True).value
         self.max_time = P("max_time", 90.0).value
         self.arena = (P("arena_back", 1.0).value, P("arena_side", 2.0).value)
+        # the top speed the policy was TRAINED with (0.15, or 0.10 for the slow fine-tune);
+        # scaling a policy down on the robot instead of retraining would break what it
+        # learned about how its own commands move it
+        global MAX_LIN
+        MAX_LIN = P("max_lin_vel", MAX_LIN).value
         self.image_topic = P("image_topic", "/camera/color/image_raw").value
         # phantom rejection (first live run, 2026-09-28: yellow/orange things 4-5 m to the
         # side were taken for the ball for ~15 s). A detection must be round (sphere-fit
@@ -84,6 +89,13 @@ class BallPolicyNode(Node):
         # up and moving fits at 1.8-3.1 deg (static frames 0.24-0.86), phantoms (a wooden
         # desk edge) at 12-17 deg. 1.5 deg rejected the real ball while it was being pushed.
         self.max_fit_deg = P("max_fit_deg", 5.0).value
+        # step 1 by YOLO11s on the GPU (TensorRT); "" = colour only
+        engine = P("yolo_engine", "").value
+        self.yolo = None
+        if engine:
+            from yolo_trt import YoloTRT
+            self.yolo = YoloTRT(engine)
+            self.get_logger().info(f"YOLO engine loaded: {engine}")
         self.save_rejects = P("save_rejects", True).value
         self.n_reject = {"fit": 0, "outside": 0}
 
@@ -93,7 +105,10 @@ class BallPolicyNode(Node):
         best_effort = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         self.create_subscription(Image, self.image_topic, self.on_image, best_effort)
         self.create_subscription(CameraInfo, "/camera/color/camera_info", self.on_info, 10)
-        self.create_subscription(Odometry, "/visual_slam/tracking/odometry", self.on_odom, best_effort)
+        self.odom_source = P("odom_source", "wheel").value          # "wheel" or "vslam"
+        self.odom_hist = []                                          # (stamp ns, xy, yaw), wheel odometry
+        odom_topic = "/odom" if self.odom_source == "wheel" else "/visual_slam/tracking/odometry"
+        self.create_subscription(Odometry, odom_topic, self.on_odom, 10 if self.odom_source == "wheel" else best_effort)
 
         self.K = self.D = None
         self.detector = None
@@ -110,6 +125,8 @@ class BallPolicyNode(Node):
         self.done = False
         self.n_det = 0
         self.last_fit = (0.0, 0)
+        self.last_src = ""
+        self.prev_p = None
         self.det_ms = []
         self.create_timer(0.1, self.step)             # 10 Hz, as trained
         self.get_logger().info(f"policy loaded; goal mouth at {self.goal_xy} m, into-box yaw "
@@ -125,12 +142,28 @@ class BallPolicyNode(Node):
     def on_odom(self, msg):
         t = msg.twist.twist
         self.twist_b = np.array([t.linear.x, t.linear.y, t.angular.z])
+        if self.odom_source == "wheel":
+            q, p = msg.pose.pose.orientation, msg.pose.pose.position
+            self.odom_hist.append((Time.from_msg(msg.header.stamp).nanoseconds, np.array([p.x, p.y]), yaw_of(q)))
+            if len(self.odom_hist) > 200:
+                self.odom_hist.pop(0)
 
     def on_image(self, msg):
         self.latest_img = msg
 
     def pose(self, stamp=None):
-        """base_link in odom: (x, y, yaw), at stamp if given."""
+        """base_link in odom: (x, y, yaw), at stamp if given. From the wheel encoders
+        (drive_node /odom: drifts slowly, never jumps) or from cuVSLAM via TF (jumped
+        0.3-2 m twice with the camera up against a plain wall, runs 4-5)."""
+        if self.odom_source == "wheel":
+            if not self.odom_hist:
+                raise tf2_ros.TransformException("no wheel odometry yet")
+            if stamp is None:
+                _, p, yaw = self.odom_hist[-1]
+            else:
+                ns = Time.from_msg(stamp).nanoseconds
+                _, p, yaw = min(self.odom_hist, key=lambda h: abs(h[0] - ns))
+            return p.copy(), yaw
         t = self.tf.lookup_transform("odom", "base_link", Time() if stamp is None else Time.from_msg(stamp),
                                      timeout=rclpy.duration.Duration(seconds=0.05))
         p = t.transform.translation
@@ -142,7 +175,7 @@ class BallPolicyNode(Node):
                 T = tf_matrix(self.tf.lookup_transform("base_link", "camera_color_optical_frame", Time()))
             except tf2_ros.TransformException:
                 return False
-            self.detector = BallDetector(self.K, self.D, T, self.r, self.r - BASE_LINK_Z)
+            self.detector = BallDetector(self.K, self.D, T, self.r, self.r - BASE_LINK_Z, yolo=self.yolo)
             self.get_logger().info(f"detector ready; colour lens in base_link at {np.round(T[:3, 3], 3)}")
         if self.start is None:
             try:
@@ -181,6 +214,7 @@ class BallPolicyNode(Node):
             return True, self._reject("outside", img, d, b_s)
         self.n_det += 1
         self.last_fit = (d.rms_deg, d.area_px)
+        self.last_src = d.source
         return True, ball_w
 
     def _reject(self, why, img, d, b_s):
@@ -215,6 +249,15 @@ class BallPolicyNode(Node):
         self.age = min(now - self.last_det_t, AGE_CAP_S) if self.ever_seen else AGE_CAP_S
 
         p, yaw = self.pose()
+        # odometry sanity: Kaya cannot move 0.25 m in one 0.1 s step (2.5 m/s). Run 4 ended
+        # on a silent cuVSLAM jump of 2 m in ~2 s (camera staring at a featureless wall up
+        # close); acting on it is worse than stopping.
+        if self.prev_p is not None and np.linalg.norm(p - self.prev_p) > 0.25:
+            self.done = True
+            self.cmd.publish(Twist())
+            self.get_logger().error(f"STOP: odometry jumped {np.linalg.norm(p - self.prev_p):.2f} m in one step")
+            raise SystemExit
+        self.prev_p = p
         sp, syaw = self.start
         # goal (box mouth centre) and its into-box direction, in odom
         g_w = sp + rot(syaw) @ self.goal_xy
@@ -262,7 +305,7 @@ class BallPolicyNode(Node):
                 f"t {t:5.1f}s robot ({p_s[0]:+.2f},{p_s[1]:+.2f}) | ball {'SEEN' if self.seen_now else f'mem {self.age:.1f}s' if self.ever_seen else 'never seen'}"
                 f" at ({ball_s[0]:+.2f},{ball_s[1]:+.2f}) goal-frame ({b_g[0]:+.2f},{b_g[1]:+.2f}) | action "
                 f"({self.action[0]:+.2f},{self.action[1]:+.2f},{self.action[2]:+.2f}) | det {np.mean(self.det_ms[-20:]) if self.det_ms else 0:.0f} ms"
-                f" fit {self.last_fit[0]:.2f} deg")
+                f" fit {self.last_fit[0]:.2f} deg {self.last_src}")
         if reason:
             self.done = True
             self.get_logger().warn(f"STOP: {reason} after {t:.1f} s ({self.n_det} detections, rejected {self.n_reject})")

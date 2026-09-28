@@ -341,6 +341,36 @@ rolling resistance, set from the measurements below.
     on the robot, the policy runs in numpy (matches TorchScript to 1e-5).
   - The dry run is not meaningful for actions: "last action" feedback with a
     robot that doesn't move saturates the outputs.
+  - **Runs 3-7, same setup** (logs in the same folder):
+
+        run 3  timeout   a big lit cardboard box: the single-biggest-blob
+                         detector rejected it and never looked at the real ball
+        run 4  no goal   ball drifted right into a corner, robot could not
+                         recover; cuVSLAM jumped 2 m (camera facing a plain wall)
+        run 5  stopped   ball merged with brown cardboard up close (colour);
+                         cuVSLAM jumped 0.33 m -> new jump guard stopped it
+        run 6  stopped   perfect detection (0 rejections) and smooth wheel
+                         odometry; ball pushed 60 cm in 4 s then ran off left
+                         past the mouth, robot crossed the 1 m side limit
+        run 7  SCORED    20.9 s with the 0.10 m/s policy: steady push, no
+                         runaway, corrections at the mouth
+
+    What changed along the way:
+    - **Detector:** best of the 3 biggest blobs; then **YOLO11s**
+      (pretrained COCO "sports ball", TensorRT FP16 on the Jetson, 6.4 ms)
+      finds the ball, and the sphere fit runs inside its box. YOLO misses a
+      ball cut off by the image edge, so colour is accepted only in a
+      touching zone (bottom edge, <= 35 cm). ~40-55 ms per frame in total.
+    - **Wheel odometry** (drive_node /odom) instead of cuVSLAM for the game:
+      no jumps.
+    - **0.10 m/s fine-tune** (`...slow010/model_400.pt`, 100% in sim, ~19 s per
+      goal): the user saw 0.15 m/s kick the ball away.
+  - **Still open:**
+    - fine-tune YOLO on cut-off balls (auto-label with the sphere fit), so
+      colour leaves the loop entirely;
+    - walls, corners and recovery (section 2b);
+    - brown cardboard near the ball can still merge with it in the colour
+      fallback.
 - **B5 (real robot):** a ROS 2 node with the HSV detector and odometry goal
   in, `/cmd_vel` out. On the floor at home: the ball and a tape goal square.
   Needs the pending robot session first (frame-sync check, URDF camera fixes
@@ -461,6 +491,34 @@ rendered in training).
 3. **a photo of Kaya's front** (the bumper question).
 
 ---
+
+## 2b. Ball v2: "play like a footballer" (the user's idea, 2026-09-28)
+
+**Seen on the real robot:** a pushed ball tends to drift sideways; once it is
+against a wall or in a corner, the policy cannot get it back. That is not
+bad luck. The v1 arenas had **no side walls** (a ball leaving the area just
+ended the episode as a failure), and the policy only ever *pushes*. Kaya
+cannot pull a ball, so recovering one from a wall needs different skills:
+- squeezing in between the wall and the ball;
+- rolling it out along the wall;
+- knocking it off the wall at an angle;
+- then re-approaching to push again.
+
+**v2 training:**
+- arenas with walls on all sides, corners, and random obstacles (boxes,
+  chair-leg posts), randomised per episode;
+- the ball bounces off walls instead of the episode ending; out of bounds is
+  gone;
+- the curriculum includes balls placed against walls and in corners;
+- the reward still counts progress towards the goal, so a ball stuck in a
+  corner pays only once it is recovered;
+- also add a small penalty on ball speed, for control: dribble, don't kick.
+- The same detector interface (YOLO + sphere fit), so the robot node is
+  unchanged.
+
+**Speed:** the user found 0.15 m/s a bit fast (the ball runs away). Retrain
+or fine-tune at a lower top speed rather than scaling actions down on the
+robot. First try: a 0.10 m/s fine-tune (`run_name slow010`).
 
 ## 3. Demo 2: warehouse inspection (SECOND, sim only)
 
