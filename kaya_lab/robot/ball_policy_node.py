@@ -108,6 +108,8 @@ class BallPolicyNode(Node):
         self.last_marker_ids, self.marker_counts = [], {}
         self.goal_yaw_w = None                                      # trusted, from ID 0 only
         self.marker_rejected = 0
+        self.reject_run = []                          # consecutive rejected box placements (world xy)
+        self.marker_reanchored = 0
         # phantom rejection (first live run, 2026-09-28: yellow/orange things 4-5 m to the
         # side were taken for the ball for ~15 s). A detection must be round (sphere-fit
         # residual) and inside the play area. Run 2 set the threshold: the real ball close
@@ -182,6 +184,7 @@ class BallPolicyNode(Node):
         self.last_src = ""
         self.prev_p = None
         self.seen_in_front = False                    # the ball was in front of the mouth, within the posts
+        self.inside_n, self.inside_t0 = 0, None       # consecutive frames that SAW the ball inside the box
         self.det_ms = []
         self.create_timer(0.1, self.step)             # 10 Hz, as trained
         self.get_logger().info(f"policy loaded; goal mouth at {self.goal_xy} m, into-box yaw "
@@ -340,7 +343,10 @@ class BallPolicyNode(Node):
             self.n_fuse["vslam" if use_v else "wheel"] += 1
             self.wheel_fwd += float(dw[0])
             if self.stalled():
-                d = np.zeros(2)                          # blocked: the wheels spin, the robot does not move
+                # blocked: the wheels spin, but only the motion INTO the obstacle is lost. Run 21
+                # froze all of it and the robot, sliding sideways along the ball for 4 s, lost
+                # ~30 cm: the box markers then disagreed and were rejected, and a false goal followed
+                d = d - max(float(d @ self.stall_dir), 0.0) * self.stall_dir
                 self.n_stalled += 1
             if self.use_gyro:
                 dy = gy - self.prev_g                    # turning: always the gyro
@@ -385,8 +391,20 @@ class BallPolicyNode(Node):
             c_box = BOX_FROM_MARKER[mid][:2, 3]
             g = p + R @ mc_b - rot(self.goal_yaw_w) @ c_box
             if self.goal_w is not None and np.linalg.norm(g - self.goal_w[0]) > 0.15:
+                # a phantom (a flip) is a one-off; three rejected sightings in a row that agree with
+                # each other mean the box has not moved but OUR odometry has (run 21: 14 good
+                # sightings rejected after the drift): re-anchor the box to them
                 self.marker_rejected += 1
+                self.reject_run.append(g)
+                self.reject_run = self.reject_run[-3:]
+                if len(self.reject_run) == 3 and max(np.linalg.norm(r - np.mean(self.reject_run, axis=0))
+                                                     for r in self.reject_run) < 0.05:
+                    self.goal_w = (np.mean(self.reject_run, axis=0), self.goal_yaw_w)
+                    self.marker_reanchored += 1
+                    self.reject_run = []
+                    self.get_logger().warn(f"box re-anchored by {np.linalg.norm(g - self.goal_w[0]):.2f} m (odometry drift)")
                 continue
+            self.reject_run = []
             accepted.append((mid, g))
         if not accepted:
             return
@@ -581,8 +599,15 @@ class BallPolicyNode(Node):
         in_lane = abs(b_g[1]) < self.half_w - self.r + 0.03
         if self.ever_seen and b_g[0] < 0.0 and in_lane:
             self.seen_in_front = True
-        scored = (self.ever_seen and self.age < 1.0 and b_g[0] > self.r and in_lane
-                  and self.seen_in_front)
+        # ... and SEEN inside in 3 frames in a row over >= 0.5 s: in run 21 a single bad "near"
+        # detection (fit 4.35 deg, the ball 23 cm further on than 0.3 s before) called a false goal
+        if ball_w is not None:                             # a fresh detection this step
+            if b_g[0] > self.r and in_lane:
+                self.inside_n += 1
+                self.inside_t0 = self.inside_t0 or time.time()
+            else:
+                self.inside_n, self.inside_t0 = 0, None
+        scored = (self.inside_n >= 3 and time.time() - self.inside_t0 >= 0.5 and self.seen_in_front)
         left = p_s[0] < -self.arena[0] or abs(p_s[1]) > self.arena[1] or p_s[0] > self.goal_xy[0] + 0.5
         reason = "SCORED" if scored else "time limit" if t > self.max_time else "left the arena" if left else None
 
@@ -609,7 +634,7 @@ class BallPolicyNode(Node):
                 + (f" | STALLED ({self.stall_reason})" if self.stalled() else ""))
         if reason:
             self.done = True
-            self.get_logger().warn(f"STOP: {reason} after {t:.1f} s ({self.n_det} detections, {self.n_marker} marker sightings by id {self.marker_counts}, {self.marker_rejected} marker jumps rejected, rejected {self.n_reject}"
+            self.get_logger().warn(f"STOP: {reason} after {t:.1f} s ({self.n_det} detections, {self.n_marker} marker sightings by id {self.marker_counts}, {self.marker_rejected} marker jumps rejected ({self.marker_reanchored} re-anchors), rejected {self.n_reject}"
                                    + (f", odometry steps from {self.n_fuse}, stalled steps {self.n_stalled}" if self.odom_source == "fused" else "") + ")")
             raise SystemExit
 
