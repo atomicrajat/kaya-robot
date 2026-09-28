@@ -570,6 +570,57 @@ config in `ball_goal_env_cfg.py`):
 or fine-tune at a lower top speed rather than scaling actions down on the
 robot. First try: a 0.10 m/s fine-tune (`run_name slow010`).
 
+**Night of 2026-09-28/29: fully on-board, v2.2 -> v2.4 (runs 19-34, filmed from run 20).**
+No overhead camera and no new markers: the IMU, the three box markers, and
+the depth camera. Every run from 20 on was filmed by the user; the videos
+(1 frame/s contact sheets next to the logs) overruled the logs several times.
+
+    run  policy  start                    result
+    20   v2.2    right of the box         no - pinned against the panel's outside 25 s
+    21   v2.2    right of the box         FALSE goal (stall froze drift; one bad frame)
+    22   v2.2    right of the box         no - pushed into the panel 16 s; false goal
+    23   v2.2    right of the box         no - same; false goal
+    24   v2.3    right of the box         SCORED 55 s (pinned ~18 s, then 12 s in the empty box)
+    25   v2.3    left                     no - box re-anchored 58 cm early
+    26   v2.3    left                     FALSE goal - the ROBOT drove into the box
+    27   v2.3    left                     SCORED 18.8 s
+    28   v2.3    behind the robot         no - chased cardboard (colour-only detections)
+    29   v2.3    behind the robot         no - spun 90 s: the real ball rejected as "outside"
+    30   v2.3    behind the robot         no - stopped; colour gate rejected the far ball
+    31   v2.3    behind, right            no - found it; 1.5 m side limit stopped it
+    32   v2.3    behind                   SCORED (real) - uncalled; heading 65 deg off (IMU queue)
+    33   v2.3    behind, left             no - reached the box from the side; ball "outside" 124x
+    34   v2.3    behind, left             no - again at the box's side, against the left wall
+
+v2.2: 0 of 4 from beside the box. v2.3: 3 real goals in 11 runs, including a
+ball starting behind the robot (search, find, dribble 2.5 m, score).
+
+**The one policy failure left:** from beside the box it goes for the mouth
+from the side; the ball clips the panel's front corner and ends up against
+the panel's outside (or the wall beside the box), and the robot presses it
+there. v2.4 (`Kaya-BallGoal-V24-v0`, fine-tuned from v2.3) trains exactly
+this: the user's measured ball (2,200 N/m squash, grip 1.0), close-range depth
+blindness (< 0.3 m) for walls and obstacles, starts beside the box up to 35
+cm in front of the mouth, and a penalty for the ball against a panel's outside.
+
+**Robot-node fixes, each found by a run (ball_policy_node.py):**
+- stall hold freezes all motion (run 20's video: wheels "drove" a pinned robot 1.5 m);
+- three agreeing rejected marker sightings re-anchor the box (run 21);
+- the box's part of the depth scan is computed from its marker pose (run 22:
+  the real depth is blind to the panel the ball is pinned against);
+- a goal needs 3 fresh detections inside over 0.5 s, a box seen within 10 s,
+  and the robot's centre < 12 cm past the mouth line (runs 21, 22, 26, 32);
+- colour-only detections need a YOLO-backed track, or 3 steady sightings
+  (runs 28, 30); balls behind the start are real (run 29);
+- no impact stalls while turning > 0.5 rad/s (run 29);
+- the IMU queue keeps every sample (depth 1 lost ~65 deg in a spin, run 32);
+- "ball beyond the goal wall" is judged in the box frame (run 33).
+
+**Open:** does v2.4 stop going for the goal from the side? Sim comparison
+(`scripts/v2_corner_eval.py --cfg v24`, side and corner starts) then the same
+filmed starts on the robot. Also: a small penalty for the robot inside the
+empty goal (run 24).
+
 ## 3. Demo 2: warehouse inspection (SECOND, sim only)
 
 **Task:** in a warehouse with shelves and aisles, Kaya visits a list of

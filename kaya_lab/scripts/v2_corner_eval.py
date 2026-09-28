@@ -24,13 +24,17 @@ parser.add_argument("--num_envs", type=int, default=256)
 parser.add_argument("--panel_x", type=float, nargs=2, default=(0.23, 0.23))
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--measured_ball", action="store_true", help="the real ball's measured squash and grip")
+parser.add_argument("--cfg", choices=["v23", "v24"], default="v23",
+                    help="v24: the measured ball and the real depth's close-range blindness too")
+parser.add_argument("--panel_gap", type=float, nargs=2, default=(0.0, 0.0),
+                    help="extra distance out from the panel's outer face, m")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
 
 import torch  # noqa: E402
 
-from kaya_lab.tasks.ball_goal.ball_goal_env_cfg import KayaBallGoalV23EnvCfg  # noqa: E402
+from kaya_lab.tasks.ball_goal.ball_goal_env_cfg import KayaBallGoalV23EnvCfg, KayaBallGoalV24EnvCfg  # noqa: E402
 from kaya_lab.tasks.ball_goal.ball_goal_v2_env import KayaBallGoalV2Env  # noqa: E402
 
 
@@ -86,7 +90,7 @@ def evaluate(env, cfg, act):
 
 
 def main():
-    cfg = KayaBallGoalV23EnvCfg()
+    cfg = KayaBallGoalV24EnvCfg() if args.cfg == "v24" else KayaBallGoalV23EnvCfg()
     cfg.scene.num_envs = args.num_envs
     cfg.seed = args.seed
     cfg.initial_level = 1.0
@@ -94,6 +98,7 @@ def main():
     cfg.wall_ball_frac = (1.0, 1.0)               # every start against a wall ...
     cfg.side_panel_frac = 1.0                     # ... namely a box side panel
     cfg.side_panel_x = tuple(args.panel_x)
+    cfg.side_panel_gap = tuple(args.panel_gap)
     if args.measured_ball:
         from kaya_lab.ball import ball_cfg_measured
         cfg.ball = ball_cfg_measured().replace(prim_path=cfg.ball.prim_path)
@@ -104,7 +109,8 @@ def main():
         for spec in args.ckpt:
             name, path = spec.split("=", 1)
             t0 = time.time()
-            out = {"policy": name, "panel_x": list(args.panel_x), "measured_ball": args.measured_ball, **evaluate(env, cfg, load_actor(path, env.device)),
+            out = {"policy": name, "cfg": args.cfg, "panel_x": list(args.panel_x), "panel_gap": list(args.panel_gap),
+                   "measured_ball": args.measured_ball or args.cfg == "v24", **evaluate(env, cfg, load_actor(path, env.device)),
                    "wall_s": round(time.time() - t0, 1)}
             print("[corner] RESULT " + json.dumps(out), flush=True)
     env.close()

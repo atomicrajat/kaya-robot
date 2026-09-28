@@ -662,3 +662,38 @@ Three lessons:
 episodes. That drops the slow episodes still running, which are mostly
 failures, and flatters every policy. It now counts exactly the first 2
 episodes of every robot.
+
+## Night of 2026-09-29: sixteen filmed runs, and what each one taught
+
+The pattern of the night: **run, watch the video, find the one thing that
+went wrong, fix it, run again.** Almost every fix was in the robot's own code
+(`ball_policy_node.py`), not the policy. The policy kept doing sensible
+things, but was being fed wrong information. Things to remember:
+
+1. **Everything the policy "sees" is a claim, so check it.** In sim the
+   inputs are true by construction. On the robot, each one comes from a
+   sensor plus code, and each can lie:
+   - the depth scan said "3 m clear" while pressed against a panel;
+   - the ball detector found "balls" on cardboard;
+   - the heading lost 65 degrees in a spin;
+   - a filter threw the real ball away as "outside".
+2. **Guards against one failure cause the next one.** Each of these was
+   right for the run it came from, and wrong for a later one:
+   - "the ball must be in front" (against phantoms) rejected a real ball behind the robot;
+   - "colour needs YOLO" (against cardboard) rejected a real far ball;
+   - "the robot must be outside the box" (against run 26) rejected a real goal.
+
+   Write down *why* each guard exists (the comments name the run), so the
+   next failure can be traced back to it.
+3. **A queue of 1 is a bug waiting for load.** The IMU subscription kept only
+   the newest sample. That's fine while the node is idle. Once detection
+   took 50-170 ms, it dropped most of the 200 Hz gyro stream. It only showed
+   up in a fast spin, as a 65 degree heading error.
+4. **A search behaviour came for free.** With the ball behind it and nothing
+   in view, v2.3 spun to look, then drove to the ball. In sim, balls are
+   often out of view (the detector model has a field of view), so it learned
+   to look.
+5. **What's left is a real policy gap, and it matches what you saw:** "it
+   always tries to score from the side, hence it gets stuck". v2.4 trains on
+   exactly that start, with your measured ball and the camera's real
+   blindness.
