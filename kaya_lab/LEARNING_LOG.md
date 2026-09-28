@@ -617,3 +617,48 @@ that step: the v2 rooms needed 1.08M contact patches and got 262k. That was
 harmless here (one step, before learning starts), but a dropped contact can
 let a ball fall through a wall. The v2 configs now reserve 2^21. **Read the
 errors in your logs even when training "works".**
+
+## The video beats the log (run 20), and the corner test in sim
+
+Run 20's log said the robot dribbled the ball 1.5 m along the wall. Your video
+showed it pinned beside the box for 25 s, not moving at all: the wheels spun
+while strafing, and wheel odometry "drove" it away. I had just changed the
+stall hold on the strength of a *log* (run 21); the video proved that change
+wrong, and it was reverted the same hour. **Film the robot when you can.**
+
+**Measuring the ball.** 1.7 kg on a board squashed it 14.0 -> 12.5 cm: 7.5 mm
+at each of the two contacts, so 16.7 N / 0.0075 m = 2,200 N/m per contact.
+It never slides on cardboard, only rolls, so its grip is ~1.0. For an air
+ball, stiffness ~ 2 pi R x pressure, which puts yours at only ~0.7 psi
+above the room: a soft ball.
+
+**Why a ball locks in a corner.** Pressed against the wall, the panel, the
+floor and the robot at once, no rolling direction works at every contact,
+and a grippy ball can't slide instead. Pushing harder tightens the lock.
+Backing off releases it, which is why "relax, then hit" is physically right.
+
+**The corner test** (`scripts/v2_corner_eval.py`, 512 episodes each, every
+ball starting in the corner between a side panel and the goal wall):
+
+| ball | v2.2 | v2.3 |
+|---|---|---|
+| sim ball (grip 0.65, rigid) | 85% in 13.2 s | 87% in 11.7 s |
+| your measured ball | 80% in 21.0 s | 78% in 20.8 s, 2 kicks/episode |
+
+Three lessons:
+1. **v2.3 kicks more** (0.4 -> 1.2 kicks per episode, 2 with the real
+   ball), but it doesn't score more. So kicking isn't what was missing *in
+   the sim*.
+2. **The measured ball makes the corner harder** (80% vs 85%, and it takes
+   twice as long), but not impossible.
+3. **Sim is 80%, the real robot is 0 of about 8.** The rest of the gap is not
+   the ball. The prime suspect is what the robot *believes*: in run 20 the
+   box position went 23 s stale (every marker was rejected after the fake
+   drift), so the policy pushed at a box that wasn't where it thought. That
+   is fixed now (stall freezes all motion, and agreeing markers re-anchor
+   the box). The next filmed run tests it.
+
+**How the eval nearly lied:** the first version stopped at 512 finished
+episodes. That drops the slow episodes still running, which are mostly
+failures, and flatters every policy. It now counts exactly the first 2
+episodes of every robot.
