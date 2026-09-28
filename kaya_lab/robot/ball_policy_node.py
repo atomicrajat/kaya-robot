@@ -42,6 +42,7 @@ from numpy_policy import NumpyPolicy
 
 MAX_LIN, MAX_ANG = 0.15, 1.0          # drive node limits; the policy was trained on these
 AGE_CAP_S = 5.0                       # as in training
+COLOUR_TRUST_S = 5.0                  # a colour-only ball detection needs YOLO within this long
 BOX_FRESH_S = 10.0                    # a goal only counts within this long of a marker sighting
 FUSE_JUMP_M = 0.05                    # per 0.1 s step: 0.5 m/s of disagreement = a visual jump
 FUSE_JUMP_RAD = math.radians(8.0)
@@ -126,7 +127,8 @@ class BallPolicyNode(Node):
             self.yolo = YoloTRT(engine)
             self.get_logger().info(f"YOLO engine loaded: {engine}")
         self.save_rejects = P("save_rejects", True).value
-        self.n_reject = {"fit": 0, "outside": 0}
+        self.n_reject = {"fit": 0, "outside": 0, "unconfirmed": 0}
+        self.yolo_t, self.yolo_w = None, None               # the last YOLO-backed ball sighting
 
         self.tf = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf, self)
@@ -510,6 +512,18 @@ class BallPolicyNode(Node):
         b_s = rot(-syaw) @ (ball_w - sp)                   # in the start frame
         if b_s[0] < -self.arena[0] or b_s[0] > self.goal_xy[0] + 0.4 or abs(b_s[1]) > self.arena[1] + 0.5:
             return True, self._reject("outside", img, d, b_s)
+        # Colour-only detections ("round", "near") need YOLO's backing: run 28 chased yellow-brown
+        # cardboard blobs for 27 s while the ball sat behind the robot - YOLO confirmed none of
+        # them. So one counts only within COLOUR_TRUST_S of a YOLO sighting, and near where the
+        # ball was then (it can have rolled since: the gate grows with the time)
+        now = time.time()
+        if d.source == "yolo":
+            self.yolo_t, self.yolo_w = now, ball_w
+        elif self.yolo_t is None or now - self.yolo_t > COLOUR_TRUST_S or \
+                np.linalg.norm(ball_w - self.yolo_w) > 0.25 + 0.5 * (now - self.yolo_t):
+            return True, self._reject("unconfirmed", img, d, b_s)
+        else:                                                # a continuous track from a YOLO sighting:
+            self.yolo_t, self.yolo_w = now, ball_w           # follow it while YOLO can't (a cut-off ball)
         self.n_det += 1
         self.last_fit = (d.rms_deg, d.area_px)
         self.last_src = d.source
@@ -624,8 +638,11 @@ class BallPolicyNode(Node):
         # box estimate carried by wheel odometry through 16 s of pinned wheel-spin (video: the
         # ball was 50 cm right of the box)
         box_fresh = self.goal_source != "marker" or time.time() - self.goal_seen_t < BOX_FRESH_S
+        # ... and with the robot itself still outside: pushing the ball in, its centre stays behind
+        # the mouth line (the ball is ahead of it); run 26 "scored" with the ROBOT inside the box
+        robot_out = (rot(-gdir) @ (p - g_w))[0] < 0.0
         scored = (self.inside_n >= 3 and time.time() - self.inside_t0 >= 0.5 and self.seen_in_front
-                  and box_fresh)
+                  and box_fresh and robot_out)
         left = p_s[0] < -self.arena[0] or abs(p_s[1]) > self.arena[1] or p_s[0] > self.goal_xy[0] + 0.5
         reason = "SCORED" if scored else "time limit" if t > self.max_time else "left the arena" if left else None
 
