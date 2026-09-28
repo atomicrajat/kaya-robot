@@ -156,6 +156,10 @@ class KayaBallGoalV2EnvCfg(KayaBallGoalDetEnvCfg):
     jam_ball_speed = 0.03                 # [m/s] "not moving"
     side_panel_frac = 0.0                 # of wall starts: ball against the OUTSIDE of a box side panel
     side_panel_x = (0.05, 0.25)           # [m] behind the mouth; ~0.23 = in the corner with the goal wall
+    side_panel_gap = (0.0, 0.0)           # [m] extra distance out from the panel's outer face
+    depth_blind = 0.0                     # [m] sensed surfaces closer than this read as nothing
+    rew_post = 0.0                        # per step with the ball against the outside of a side panel
+    post_dist = 0.02                      # [m] ball surface to the panel's outer face
     rew_center_push = 0.0                 # per step pushing a CENTRED ball that is right next to a surface
     center_push_half_y = 0.03             # [m] "centred in the pocket"
     center_push_clear = 0.05              # [m] ball surface to wall / obstacle / box panel
@@ -202,3 +206,28 @@ class KayaBallGoalV23EnvCfg(KayaBallGoalV22EnvCfg):
 
     jam_escalate = 0.15
     rew_kick = 1.0
+
+
+@configclass
+class KayaBallGoalV24EnvCfg(KayaBallGoalV23EnvCfg):
+    """v2.4, after the videos of runs 20-23. From beside the box the real robot pushed the ball
+    straight at the mouth, the ball clipped the front corner of the side panel, and the robot
+    then pressed it into the panel's outside for 10-25 s. The sim got it out 80-85% of the
+    time; three differences, all fixed here:
+      * the ball: the user's measured squash (2,200 N/m per contact) and grip (1.0);
+      * the depth: the real camera is blind to plain walls/boxes closer than ~0.3 m (the goal
+        box itself is computed from its markers on the robot, so it stays visible);
+      * the situation: balls beside the box from 35 cm in front of the mouth to its back,
+        up to 25 cm out from the panel - where the real runs started - and a penalty for the
+        ball against a panel's outside, so the robot learns to bring it round the post."""
+
+    side_panel_frac = 0.5
+    side_panel_x = (-0.35, 0.25)
+    side_panel_gap = (0.0, 0.25)
+    depth_blind = 0.30
+    rew_post = -0.05
+
+    def __post_init__(self):
+        super().__post_init__()
+        from kaya_lab.ball import ball_cfg_measured
+        self.ball = ball_cfg_measured().replace(prim_path=self.ball.prim_path)

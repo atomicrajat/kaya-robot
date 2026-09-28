@@ -6,7 +6,7 @@ from isaaclab.utils.configclass import configclass
 
 from .ball_goal_env_cfg import (KayaBallGoalDetEnvCfg, KayaBallGoalEnvCfg, KayaBallGoalV2EnvCfg,  # noqa: F401
                                 KayaBallGoalV21EnvCfg, KayaBallGoalV22EnvCfg,
-                                KayaBallGoalV23EnvCfg)
+                                KayaBallGoalV23EnvCfg, KayaBallGoalV24EnvCfg)
 
 
 @configclass
@@ -33,6 +33,9 @@ def register():
          "ball_goal_v2_env:KayaBallGoalV2Env"),
         # v2.3: back off and strike a jammed ball instead of holding the press (escalating jam penalty + kick)
         ("Kaya-BallGoal-V23-v0", "KayaBallGoalV23EnvCfg", "KayaBallGoalV2PPORunnerCfg",
+         "ball_goal_v2_env:KayaBallGoalV2Env"),
+        # v2.4: measured ball, blind close-range depth, starts beside the box, post penalty
+        ("Kaya-BallGoal-V24-v0", "KayaBallGoalV24EnvCfg", "KayaBallGoalV2PPORunnerCfg",
          "ball_goal_v2_env:KayaBallGoalV2Env"),
     ]:
         if task_id in gym.registry:

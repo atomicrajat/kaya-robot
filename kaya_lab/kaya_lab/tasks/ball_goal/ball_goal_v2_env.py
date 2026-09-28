@@ -66,7 +66,7 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
         self._room, self._obs_xy, self._obs_on = self._room.to(dev), self._obs_xy.to(dev), self._obs_on.to(dev)
         self._room[:, 0], self._room[:, 1], self._room[:, 2] = -2.0, -1.5, 1.5
         self._room[:, 3] = cfg.goal_line_x + GOAL_DEPTH + CARDBOARD_T
-        for k in ("ball_speed", "bump", "jam", "center_push", "kick"):
+        for k in ("ball_speed", "bump", "jam", "center_push", "kick", "post"):
             self._sums[k] = torch.zeros(self.num_envs, device=dev)
         self._jam_run = torch.zeros(self.num_envs, device=dev)          # consecutive jammed steps
         self._since_jam = torch.full((self.num_envs,), 99.0, device=dev)  # steps since the last jam
@@ -130,7 +130,9 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
                           torch.where(kind == 3, y_side, y_rand)))
         hw = self._half_w[env_ids]
         from kaya_lab.ball import CARDBOARD_T as T
-        panel_y = torch.where(left, hw + T + BALL_RADIUS + 0.01, -(hw + T + BALL_RADIUS + 0.01))
+        g0, g1 = cfg.side_panel_gap
+        off = hw + T + BALL_RADIUS + 0.01 + g0 + (g1 - g0) * torch.rand(n, device=dev)
+        panel_y = torch.where(left, off, -off)
         panel_y = torch.maximum(torch.minimum(panel_y, r[:, 2] - gap), r[:, 1] + gap)
         px0, px1 = cfg.side_panel_x
         panel_x = cfg.goal_line_x + px0 + (px1 - px0) * torch.rand(n, device=dev)
@@ -198,11 +200,19 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
         big = torch.full_like(dx, cfg.ray_max)
         eps = 1e-6
         r = self._room
-        t = big
+        # Two kinds of surface, as on the real robot: the goal box and the wall it stands against
+        # are KNOWN (the robot computes them from the box's marker pose: depth_scan.box_scan);
+        # the other walls and the obstacles are SENSED by the depth camera, which is blind to
+        # plain surfaces closer than cfg.depth_blind with the projector off (runs 20-23)
+        t_known, t = big, big
         # the four walls (inner faces); a ray only hits the wall it is heading towards
-        for wall_x, sgn in ((r[:, 3], 1), (r[:, 0], -1)):
+        for i, (wall_x, sgn) in enumerate(((r[:, 3], 1), (r[:, 0], -1))):
             tt = (wall_x[:, None] - ox[:, None]) / torch.where(dx.abs() < eps, torch.full_like(dx, eps), dx)
-            t = torch.where((tt > 0) & (sgn * dx > 0), torch.minimum(t, tt), t)
+            hit = (tt > 0) & (sgn * dx > 0)
+            if i == 0:
+                t_known = torch.where(hit, torch.minimum(t_known, tt), t_known)
+            else:
+                t = torch.where(hit, torch.minimum(t, tt), t)
         for wall_y, sgn in ((r[:, 2], 1), (r[:, 1], -1)):
             tt = (wall_y[:, None] - oy[:, None]) / torch.where(dy.abs() < eps, torch.full_like(dy, eps), dy)
             t = torch.where((tt > 0) & (sgn * dy > 0), torch.minimum(t, tt), t)
@@ -216,7 +226,7 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
             h = cfg.obstacle_sizes[k] / 2
             cx, cy = self._obs_xy[:, k, 0], self._obs_xy[:, k, 1]
             boxes.append((cx - h, cx + h, cy - h, cy + h, self._obs_on[:, k]))
-        for x0, x1, y0, y1, on in boxes:
+        for k_box, (x0, x1, y0, y1, on) in enumerate(boxes):
             idx = 1.0 / torch.where(dx.abs() < eps, torch.full_like(dx, eps), dx)
             idy = 1.0 / torch.where(dy.abs() < eps, torch.full_like(dy, eps), dy)
             tx0, tx1 = (x0[:, None] - ox[:, None]) * idx, (x1[:, None] - ox[:, None]) * idx
@@ -224,7 +234,12 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
             tmin = torch.maximum(torch.minimum(tx0, tx1), torch.minimum(ty0, ty1))
             tmax = torch.minimum(torch.maximum(tx0, tx1), torch.maximum(ty0, ty1))
             hit = on[:, None] & (tmax >= tmin) & (tmin > 0)
-            t = torch.where(hit, torch.minimum(t, tmin), t)
+            if k_box < 2:                                    # the goal's side panels: known
+                t_known = torch.where(hit, torch.minimum(t_known, tmin), t_known)
+            else:
+                t = torch.where(hit, torch.minimum(t, tmin), t)
+        t = torch.where(t < cfg.depth_blind, big, t)         # sensed, but too close to see
+        t = torch.minimum(t, t_known)
         t = t * (1 + cfg.ray_noise * torch.randn_like(t))
         return t.clamp(0.0, cfg.ray_max)
 
@@ -294,12 +309,20 @@ class KayaBallGoalV2Env(KayaBallGoalDetEnv):
         # / box panel, and the robot driving forward (the real robot jams it this way)
         center_push = (self._in_pocket() & (ball_b[:, 1].abs() < cfg.center_push_half_y)
                        & (self._ball_clearance() < cfg.center_push_clear) & (self._actions[:, 0] > 0.3))
+        # the ball against the OUTSIDE of a side panel (v2.4): runs 20-23, a ball pushed at the
+        # mouth from the side clipped the panel's front corner and was then pressed into it
+        T = CARDBOARD_T
+        b = self.ball.data.root_pos_w.torch[:, :2] - self.scene.env_origins[:, :2]
+        on_post = ((b[:, 0] > cfg.goal_line_x - BALL_RADIUS) & (b[:, 0] < cfg.goal_line_x + GOAL_DEPTH)
+                   & (b[:, 1].abs() - (self._half_w + T) > 0)
+                   & (b[:, 1].abs() - (self._half_w + T) < BALL_RADIUS + cfg.post_dist))
         extra = {
             "ball_speed": cfg.rew_ball_speed * (v - cfg.ball_speed_free).clamp(min=0.0),
             "bump": cfg.rew_bump * (self._clearance() < cfg.bump_dist).float(),
             "jam": cfg.rew_jam * jam.float() * (1.0 + cfg.jam_escalate * self._jam_run),
             "center_push": cfg.rew_center_push * center_push.float(),
             "kick": cfg.rew_kick * kick.float(),
+            "post": cfg.rew_post * on_post.float(),
         }
         for k, x in extra.items():
             self._sums[k] += x

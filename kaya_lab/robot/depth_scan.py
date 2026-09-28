@@ -81,7 +81,7 @@ def box_scan(origin_g, heading_g, half_w, n_rays=16, fov_deg=92.0, max_range=3.0
     o = np.asarray(origin_g, float)
     t = np.full(n_rays, max_range)
     # the wall behind the box (the box stands against it), facing the robot
-    tw = (GOAL_DEPTH - o[0]) / d[:, 0]
+    tw = (GOAL_DEPTH + CARDBOARD_T - o[0]) / d[:, 0]       # the wall's face, behind the back panel
     t = np.where((tw > 0) & (d[:, 0] > 0), np.minimum(t, tw), t)
     # the side panels as thin slabs (slab test, as in the sim)
     for y0, y1 in ((half_w, half_w + CARDBOARD_T), (-half_w - CARDBOARD_T, -half_w)):
