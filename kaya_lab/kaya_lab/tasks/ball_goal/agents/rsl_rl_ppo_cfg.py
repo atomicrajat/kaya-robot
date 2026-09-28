@@ -47,3 +47,17 @@ class KayaBallGoalDetPPORunnerCfg(KayaBallGoalPPORunnerCfg):
     # asymmetric actor-critic: the critic's "critic" group holds the policy
     # observations plus the true ball state
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
+
+
+@configclass
+class KayaBallGoalV2PPORunnerCfg(KayaBallGoalDetPPORunnerCfg):
+    """v2: 31 inputs (B2's 15 + a 16-ray depth scan), a longer and harder task."""
+    experiment_name = "kaya_ball_v2"
+    max_iterations = 2000
+    actor = RslRlMLPModelCfg(
+        hidden_dims=[256, 128, 64],
+        activation="elu",
+        obs_normalization=True,
+        distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=0.5),
+    )
+    critic = RslRlMLPModelCfg(hidden_dims=[256, 128, 64], activation="elu", obs_normalization=True)

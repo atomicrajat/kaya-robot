@@ -1,0 +1,199 @@
+[09/28/2026-16:56:38] [TRT] [W] Using an engine plan file across different models of devices is not supported and is likely to affect performance or even cause errors or deadlock.
+[INFO] [1790594799.078519659] [kaya_ball_policy]: YOLO engine loaded: yolo11s_fp16.engine
+[INFO] [1790594799.120138603] [kaya_ball_policy]: policy loaded; goal mouth at [1.57 0.  ] m, into-box yaw 0 deg, width 0.46 m; LIVE - will drive
+[INFO] [1790594802.021513102] [kaya_ball_policy]: detector ready; colour lens in base_link at [0.024 0.024 0.138]
+[INFO] [1790594802.024844631] [kaya_ball_policy]: depth scan ready; depth lens in base_link at [0.024 0.047 0.138]
+[INFO] [1790594802.026719090] [kaya_ball_policy]: start pose in odom [ 0. -0.], yaw -0.0 deg (the robot must be ON THE MARK now)
+[09/28/2026-16:56:42] [TRT] [W] Using default stream in enqueueV3() may lead to performance issues due to additional calls to cudaStreamSynchronize() by TensorRT to ensure correct synchronization. Please use non-default stream instead.
+[INFO] [1790594802.603285227] [kaya_ball_policy]: t   0.6s robot (+0.00,-0.01) | ball SEEN at (+1.43,-0.65) goal-frame (-0.14,-0.65) | action (+1.00,-1.00,+0.11) | det 90 ms fit 0.58 deg round | scan L->R [2.87 3.   1.89 1.58 1.92 1.37]
+[INFO] [1790594803.567960393] [kaya_ball_policy]: t   1.5s robot (+0.19,-0.12) | ball SEEN at (+1.64,-0.57) goal-frame (+0.07,-0.57) | action (+1.00,-1.00,+0.04) | det 102 ms fit 0.48 deg yolo | scan L->R [2.92 2.1  1.45 1.62 1.75 3.  ]
+[INFO] [1790594805.061281403] [kaya_ball_policy]: t   3.0s robot (+0.42,-0.29) | ball SEEN at (+1.58,-0.60) goal-frame (+0.01,-0.60) | action (+1.00,-1.00,+0.08) | det 89 ms fit 0.57 deg yolo | scan L->R [2.96 2.13 1.43 1.09 1.41 1.13]
+[INFO] [1790594805.575756815] [kaya_ball_policy]: t   3.5s robot (+0.52,-0.36) | ball SEEN at (+1.65,-0.62) goal-frame (+0.08,-0.62) | action (+1.00,-1.00,+0.04) | det 80 ms fit 0.66 deg yolo | scan L->R [2.96 3.   1.32 1.02 1.3  1.07]
+[INFO] [1790594806.079398669] [kaya_ball_policy]: t   4.0s robot (+0.62,-0.42) | ball SEEN at (+1.60,-0.61) goal-frame (+0.03,-0.61) | action (+1.00,-1.00,+0.09) | det 78 ms fit 0.72 deg yolo | scan L->R [3.   1.51 1.3  1.21 1.32 0.97]
+[INFO] [1790594806.125698656] [kaya_ball_policy]: t   4.1s robot (+0.65,-0.43) | ball SEEN at (+1.60,-0.61) goal-frame (+0.03,-0.61) | action (+1.00,-1.00,+0.08) | det 78 ms fit 0.72 deg yolo | scan L->R [3.   1.11 1.25 1.21 1.22 0.94]
+[INFO] [1790594807.067371594] [kaya_ball_policy]: t   5.0s robot (+0.81,-0.52) | ball SEEN at (+1.70,-0.62) goal-frame (+0.13,-0.62) | action (+1.00,-1.00,-0.03) | det 70 ms fit 0.57 deg yolo | scan L->R [3.   3.   0.79 3.   1.06 0.73]
+[INFO] [1790594807.581389232] [kaya_ball_policy]: t   5.6s robot (+0.90,-0.57) | ball SEEN at (+1.70,-0.63) goal-frame (+0.13,-0.63) | action (+1.00,-1.00,+0.04) | det 58 ms fit 0.69 deg yolo | scan L->R [2.07 1.21 0.72 0.95 0.95 0.65]
+[INFO] [1790594808.086393305] [kaya_ball_policy]: t   6.1s robot (+0.99,-0.61) | ball SEEN at (+1.70,-0.63) goal-frame (+0.13,-0.63) | action (+1.00,-1.00,+0.09) | det 60 ms fit 0.71 deg yolo | scan L->R [1.64 1.08 0.91 0.86 0.87 0.53]
+[INFO] [1790594808.581820789] [kaya_ball_policy]: t   6.6s robot (+1.12,-0.62) | ball SEEN at (+1.75,-0.59) goal-frame (+0.18,-0.59) | action (+1.00,-1.00,-0.11) | det 58 ms fit 0.74 deg yolo | scan L->R [3.   0.62 0.85 0.78 0.76 0.43]
+[INFO] [1790594809.082829281] [kaya_ball_policy]: t   7.1s robot (+1.21,-0.67) | ball SEEN at (+1.75,-0.57) goal-frame (+0.18,-0.57) | action (+1.00,-1.00,+0.27) | det 52 ms fit 0.99 deg yolo | scan L->R [3.   0.69 0.76 3.   0.62 3.  ]
+[INFO] [1790594809.125661894] [kaya_ball_policy]: t   7.1s robot (+1.23,-0.67) | ball SEEN at (+1.75,-0.57) goal-frame (+0.18,-0.57) | action (+1.00,-1.00,+0.50) | det 52 ms fit 0.99 deg yolo | scan L->R [3.   0.68 0.7  0.69 0.68 3.  ]
+[WARN] [1790594810.225256000] [kaya_ball_policy]: rejected (outside): fit 0.52 deg, area 2553 px at start-frame (+2.01,-0.05)
+[INFO] [1790594810.579814853] [kaya_ball_policy]: t   8.6s robot (+1.45,-0.76) | ball SEEN at (+1.77,-0.66) goal-frame (+0.20,-0.66) | action (+0.91,-1.00,+0.01) | det 54 ms fit 2.03 deg near | scan L->R [2.79 0.47 3.   3.   3.   3.  ]
+[INFO] [1790594811.070605999] [kaya_ball_policy]: t   9.0s robot (+1.55,-0.77) | ball SEEN at (+1.68,-0.71) goal-frame (+0.11,-0.71) | action (+0.98,-1.00,+1.00) | det 53 ms fit 1.61 deg near | scan L->R [3.   0.5  0.58 3.   3.   3.  ]
+[INFO] [1790594811.588026272] [kaya_ball_policy]: t   9.6s robot (+1.61,-0.72) | ball SEEN at (+1.76,-0.64) goal-frame (+0.19,-0.64) | action (+1.00,-1.00,+0.85) | det 53 ms fit 0.35 deg near | scan L->R [2.91 0.42 0.44 0.54 3.   3.  ]
+[WARN] [1790594811.824558589] [kaya_ball_policy]: rejected (outside): fit 1.31 deg, area 2603 px at start-frame (+1.99,+0.03)
+[INFO] [1790594812.094094219] [kaya_ball_policy]: t  10.1s robot (+1.70,-0.65) | ball SEEN at (+1.81,-0.55) goal-frame (+0.24,-0.55) | action (+0.77,-0.78,+0.42) | det 57 ms fit 0.16 deg near | scan L->R [2.75 2.47 0.38 0.39 0.46 3.  ]
+[INFO] [1790594812.570757495] [kaya_ball_policy]: t  10.5s robot (+1.74,-0.59) | ball SEEN at (+1.79,-0.32) goal-frame (+0.22,-0.32) | action (+0.68,-1.00,-1.00) | det 59 ms fit 3.33 deg near | scan L->R [3.   2.47 0.35 0.33 0.35 3.  ]
+[INFO] [1790594813.601936198] [kaya_ball_policy]: t  11.6s robot (+1.78,-0.52) | ball SEEN at (+1.81,-0.29) goal-frame (+0.24,-0.29) | action (+0.99,-1.00,+0.59) | det 70 ms fit 2.38 deg near | scan L->R [2.68 0.34 0.31 0.31 0.34 3.  ]
+[INFO] [1790594814.101874799] [kaya_ball_policy]: t  12.1s robot (+1.78,-0.49) | ball SEEN at (+1.77,-0.18) goal-frame (+0.20,-0.18) | action (+0.99,-1.00,-0.09) | det 76 ms fit 2.45 deg near | scan L->R [3.   3.   0.31 3.   3.   3.  ]
+[INFO] [1790594814.124611292] [kaya_ball_policy]: t  12.1s robot (+1.78,-0.49) | ball SEEN at (+1.77,-0.18) goal-frame (+0.20,-0.18) | action (+0.90,-0.69,-0.35) | det 76 ms fit 2.45 deg near | scan L->R [3.   3.   0.31 3.   2.68 3.  ]
+[INFO] [1790594814.604178596] [kaya_ball_policy]: t  12.6s robot (+1.79,-0.50) | ball SEEN at (+1.75,-0.18) goal-frame (+0.18,-0.18) | action (+0.75,+0.10,-0.84) | det 74 ms fit 2.24 deg near | scan L->R [3.   1.05 0.31 0.31 3.   3.  ]
+[WARN] [1790594814.991462384] [kaya_ball_policy]: rejected (fit): fit 5.08 deg, area 45199 px
+[INFO] [1790594815.038265299] [kaya_ball_policy]: t  13.0s robot (+1.79,-0.49) | ball mem 0.1s at (+1.76,-0.22) goal-frame (+0.19,-0.22) | action (+0.96,+1.00,-0.29) | det 76 ms fit 4.27 deg near | scan L->R [3. 3. 3. 3. 3. 3.]
+[INFO] [1790594815.045118155] [kaya_ball_policy]: t  13.0s robot (+1.79,-0.49) | ball mem 0.1s at (+1.76,-0.22) goal-frame (+0.19,-0.22) | action (+1.00,+0.96,+0.02) | det 76 ms fit 4.27 deg near | scan L->R [3.   0.33 0.31 3.   3.   3.  ]
+[WARN] [1790594815.404854579] [kaya_ball_policy]: rejected (fit): fit 6.01 deg, area 44881 px
+[WARN] [1790594815.601598794] [kaya_ball_policy]: rejected (fit): fit 6.51 deg, area 45024 px
+[WARN] [1790594815.797600043] [kaya_ball_policy]: rejected (fit): fit 5.84 deg, area 41298 px
+[WARN] [1790594815.997370402] [kaya_ball_policy]: rejected (fit): fit 5.16 deg, area 42220 px
+[INFO] [1790594816.042860315] [kaya_ball_policy]: t  14.0s robot (+1.67,-0.41) | ball mem 0.8s at (+1.77,-0.25) goal-frame (+0.20,-0.25) | action (+0.98,+1.00,-0.30) | det 75 ms fit 4.62 deg near | scan L->R [3. 3. 3. 3. 3. 3.]
+[INFO] [1790594816.046689588] [kaya_ball_policy]: t  14.0s robot (+1.67,-0.41) | ball mem 0.8s at (+1.77,-0.25) goal-frame (+0.20,-0.25) | action (+0.95,+1.00,-0.41) | det 75 ms fit 4.62 deg near | scan L->R [3. 3. 3. 3. 3. 3.]
+[WARN] [1790594816.120494794] [kaya_ball_policy]: cuVSLAM height moved +0.15 m: tracking lost, wheels only
+[WARN] [1790594816.201279067] [kaya_ball_policy]: rejected (fit): fit 5.45 deg, area 39127 px
+[WARN] [1790594816.398001266] [kaya_ball_policy]: rejected (fit): fit 5.94 deg, area 37638 px
+[WARN] [1790594816.597430559] [kaya_ball_policy]: rejected (fit): fit 5.70 deg, area 37724 px
+[WARN] [1790594816.802644033] [kaya_ball_policy]: rejected (fit): fit 6.03 deg, area 34817 px
+[WARN] [1790594816.969577550] [kaya_ball_policy]: rejected (fit): fit 5.72 deg, area 36225 px
+[INFO] [1790594817.066879464] [kaya_ball_policy]: t  15.0s robot (+1.61,-0.24) | ball SEEN at (+1.79,-0.13) goal-frame (+0.22,-0.13) | action (+1.00,+1.00,-0.66) | det 73 ms fit 2.71 deg yolo | scan L->R [3.   3.   3.   0.31 3.   3.  ]
+[INFO] [1790594817.124466495] [kaya_ball_policy]: t  15.1s robot (+1.61,-0.23) | ball SEEN at (+1.79,-0.13) goal-frame (+0.22,-0.13) | action (+1.00,+1.00,-0.49) | det 73 ms fit 2.71 deg yolo | scan L->R [3.   3.   3.   0.31 3.   3.  ]
+[WARN] [1790594817.274791584] [kaya_ball_policy]: rejected (fit): fit 5.14 deg, area 40851 px
+[WARN] [1790594817.370872019] [kaya_ball_policy]: rejected (fit): fit 5.26 deg, area 35738 px
+[WARN] [1790594817.469076970] [kaya_ball_policy]: rejected (fit): fit 5.00 deg, area 37249 px
+[INFO] [1790594817.568393412] [kaya_ball_policy]: t  15.5s robot (+1.63,-0.15) | ball SEEN at (+1.83,-0.08) goal-frame (+0.26,-0.08) | action (+1.00,+1.00,-0.25) | det 68 ms fit 4.94 deg near | scan L->R [3.   3.   0.47 0.31 3.   3.  ]
+[INFO] [1790594818.066880896] [kaya_ball_policy]: t  16.0s robot (+1.68,-0.05) | ball SEEN at (+1.92,-0.02) goal-frame (+0.35,-0.02) | action (+1.00,+1.00,-0.14) | det 63 ms fit 2.46 deg yolo | scan L->R [3.   3.   3.   0.32 3.   3.  ]
+[WARN] [1790594818.469822137] [kaya_ball_policy]: rejected (outside): fit 2.44 deg, area 29188 px at start-frame (+1.98,+0.05)
+[WARN] [1790594818.564022834] [kaya_ball_policy]: rejected (outside): fit 2.37 deg, area 29348 px at start-frame (+1.99,+0.07)
+[INFO] [1790594818.602544943] [kaya_ball_policy]: t  16.6s robot (+1.73,+0.04) | ball mem 0.2s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+1.00,+1.00,-0.57) | det 56 ms fit 2.23 deg yolo | scan L->R [3.   3.   3.   0.34 3.   3.  ]
+[WARN] [1790594818.661492881] [kaya_ball_policy]: rejected (outside): fit 2.49 deg, area 28831 px at start-frame (+2.01,+0.08)
+[WARN] [1790594818.764471518] [kaya_ball_policy]: rejected (outside): fit 2.63 deg, area 27789 px at start-frame (+2.02,+0.08)
+[WARN] [1790594818.862402508] [kaya_ball_policy]: rejected (outside): fit 2.28 deg, area 27704 px at start-frame (+2.04,+0.07)
+[WARN] [1790594819.075318849] [kaya_ball_policy]: rejected (outside): fit 1.87 deg, area 26448 px at start-frame (+2.07,+0.03)
+[INFO] [1790594819.113423794] [kaya_ball_policy]: t  17.1s robot (+1.79,+0.12) | ball mem 0.7s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+1.00,+0.82,-0.32) | det 50 ms fit 2.23 deg yolo | scan L->R [3.   3.   3.   0.33 3.   3.  ]
+[WARN] [1790594819.166707297] [kaya_ball_policy]: rejected (outside): fit 1.89 deg, area 26635 px at start-frame (+2.08,+0.01)
+[WARN] [1790594819.269116828] [kaya_ball_policy]: rejected (outside): fit 1.89 deg, area 27006 px at start-frame (+2.09,+0.01)
+[WARN] [1790594819.363829637] [kaya_ball_policy]: rejected (outside): fit 1.09 deg, area 26851 px at start-frame (+2.07,+0.06)
+[WARN] [1790594819.465027898] [kaya_ball_policy]: rejected (outside): fit 1.55 deg, area 25775 px at start-frame (+2.12,+0.06)
+[WARN] [1790594819.562849220] [kaya_ball_policy]: rejected (outside): fit 1.52 deg, area 25766 px at start-frame (+2.14,+0.06)
+[INFO] [1790594819.597614316] [kaya_ball_policy]: t  17.6s robot (+1.86,+0.16) | ball mem 1.2s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.94,-0.37,-0.26) | det 47 ms fit 2.23 deg yolo | scan L->R [3.   0.34 3.   0.45 3.   3.  ]
+[WARN] [1790594819.665316193] [kaya_ball_policy]: rejected (outside): fit 1.59 deg, area 25128 px at start-frame (+2.16,+0.05)
+[WARN] [1790594819.764403764] [kaya_ball_policy]: rejected (outside): fit 1.63 deg, area 24913 px at start-frame (+2.17,+0.04)
+[WARN] [1790594819.865138554] [kaya_ball_policy]: rejected (outside): fit 1.62 deg, area 24948 px at start-frame (+2.18,+0.03)
+[WARN] [1790594819.967158409] [kaya_ball_policy]: rejected (outside): fit 1.62 deg, area 24958 px at start-frame (+2.19,+0.01)
+[WARN] [1790594820.066336126] [kaya_ball_policy]: rejected (outside): fit 1.62 deg, area 24922 px at start-frame (+2.19,-0.01)
+[INFO] [1790594820.103209320] [kaya_ball_policy]: t  18.1s robot (+1.92,+0.13) | ball mem 1.7s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.67,-0.44,-0.61) | det 46 ms fit 2.23 deg yolo | scan L->R [3.   0.33 3.   0.37 3.   3.  ]
+[WARN] [1790594820.170702199] [kaya_ball_policy]: rejected (outside): fit 1.62 deg, area 24814 px at start-frame (+2.20,-0.03)
+[WARN] [1790594820.265616774] [kaya_ball_policy]: rejected (outside): fit 1.61 deg, area 24567 px at start-frame (+2.20,-0.05)
+[WARN] [1790594820.480618429] [kaya_ball_policy]: rejected (outside): fit 1.68 deg, area 24049 px at start-frame (+2.20,-0.09)
+[WARN] [1790594820.572051774] [kaya_ball_policy]: rejected (outside): fit 1.69 deg, area 23693 px at start-frame (+2.20,-0.11)
+[INFO] [1790594820.577279875] [kaya_ball_policy]: t  18.5s robot (+1.96,+0.09) | ball mem 2.2s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.48,-0.86,-1.00) | det 47 ms fit 2.23 deg yolo | scan L->R [3.   0.34 3.   0.31 3.   3.  ]
+[WARN] [1790594820.673099406] [kaya_ball_policy]: rejected (outside): fit 1.81 deg, area 23007 px at start-frame (+2.20,-0.13)
+[WARN] [1790594820.774259586] [kaya_ball_policy]: rejected (outside): fit 1.79 deg, area 22707 px at start-frame (+2.19,-0.15)
+[WARN] [1790594820.867695618] [kaya_ball_policy]: rejected (outside): fit 1.69 deg, area 22470 px at start-frame (+2.18,-0.15)
+[WARN] [1790594820.971911574] [kaya_ball_policy]: rejected (outside): fit 1.63 deg, area 22419 px at start-frame (+2.17,-0.17)
+[WARN] [1790594821.065294773] [kaya_ball_policy]: rejected (outside): fit 1.40 deg, area 22952 px at start-frame (+2.17,-0.17)
+[INFO] [1790594821.069968552] [kaya_ball_policy]: t  19.0s robot (+1.93,+0.03) | ball mem 2.7s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.04,-1.00,-0.91) | det 48 ms fit 2.23 deg yolo | scan L->R [0.4  3.   0.39 3.   3.   0.69]
+[WARN] [1790594821.164100703] [kaya_ball_policy]: rejected (outside): fit 1.17 deg, area 22660 px at start-frame (+2.15,-0.19)
+[WARN] [1790594821.266960904] [kaya_ball_policy]: rejected (outside): fit 1.28 deg, area 24037 px at start-frame (+2.16,-0.22)
+[WARN] [1790594821.370127739] [kaya_ball_policy]: rejected (outside): fit 1.18 deg, area 24099 px at start-frame (+2.12,-0.25)
+[WARN] [1790594821.472134633] [kaya_ball_policy]: rejected (outside): fit 1.11 deg, area 23526 px at start-frame (+2.09,-0.28)
+[WARN] [1790594821.569939123] [kaya_ball_policy]: rejected (outside): fit 1.18 deg, area 21703 px at start-frame (+2.06,-0.30)
+[INFO] [1790594821.574985938] [kaya_ball_policy]: t  19.5s robot (+1.87,+0.01) | ball mem 3.2s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.03,-1.00,-1.00) | det 48 ms fit 2.23 deg yolo | scan L->R [3.  3.  3.  0.5 3.  3. ]
+[WARN] [1790594821.667957892] [kaya_ball_policy]: rejected (outside): fit 1.52 deg, area 22510 px at start-frame (+2.04,-0.31)
+[WARN] [1790594821.771602982] [kaya_ball_policy]: rejected (outside): fit 1.58 deg, area 23013 px at start-frame (+2.03,-0.30)
+[WARN] [1790594821.868630007] [kaya_ball_policy]: rejected (outside): fit 0.58 deg, area 20719 px at start-frame (+2.02,-0.26)
+[WARN] [1790594822.096798477] [kaya_ball_policy]: rejected (outside): fit 0.17 deg, area 9199 px at start-frame (+2.01,-0.28)
+[INFO] [1790594822.102001073] [kaya_ball_policy]: t  20.1s robot (+1.80,+0.02) | ball mem 3.7s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.01,-0.87,-1.00) | det 51 ms fit 2.23 deg yolo | scan L->R [3.   0.49 3.   0.61 3.   3.  ]
+[INFO] [1790594822.553800270] [kaya_ball_policy]: t  20.5s robot (+1.76,+0.05) | ball mem 4.2s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.03,-0.63,-0.99) | det 55 ms fit 2.23 deg yolo | scan L->R [3.   0.69 3.   0.46 3.   3.  ]
+[INFO] [1790594822.558238682] [kaya_ball_policy]: t  20.5s robot (+1.76,+0.05) | ball mem 4.2s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.01,-0.61,-1.00) | det 55 ms fit 2.23 deg yolo | scan L->R [3.   0.69 3.   0.46 3.   3.  ]
+[INFO] [1790594823.129236835] [kaya_ball_policy]: t  21.1s robot (+1.73,+0.10) | ball mem 4.8s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.23,-0.76,-1.00) | det 75 ms fit 2.23 deg yolo | scan L->R [3.   0.47 3.   0.46 0.47 3.  ]
+[INFO] [1790594823.590660944] [kaya_ball_policy]: t  21.6s robot (+1.73,+0.16) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.28,-0.49,-1.00) | det 83 ms fit 2.23 deg yolo | scan L->R [3.  3.  3.  3.  1.1 2.9]
+[INFO] [1790594823.594763793] [kaya_ball_policy]: t  21.6s robot (+1.73,+0.16) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.25,-0.41,-1.00) | det 83 ms fit 2.23 deg yolo | scan L->R [3.  3.  3.  3.  1.1 2.9]
+[INFO] [1790594824.054299746] [kaya_ball_policy]: t  22.0s robot (+1.78,+0.21) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.35,-0.59,-1.00) | det 82 ms fit 2.23 deg yolo | scan L->R [3.   0.69 1.09 2.85 2.23 3.  ]
+[INFO] [1790594824.556119623] [kaya_ball_policy]: t  22.5s robot (+1.81,+0.21) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.52,+0.48,-1.00) | det 76 ms fit 2.23 deg yolo | scan L->R [1.25 1.43 2.29 3.   3.   3.  ]
+[INFO] [1790594825.052321179] [kaya_ball_policy]: t  23.0s robot (+1.78,+0.17) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-1.00,+0.00,-1.00) | det 71 ms fit 2.23 deg yolo | scan L->R [1.87 3.   3.   3.   2.22 2.15]
+[INFO] [1790594825.555963610] [kaya_ball_policy]: t  23.5s robot (+1.75,+0.11) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.80,-0.29,-1.00) | det 60 ms fit 2.23 deg yolo | scan L->R [3.   3.   2.6  2.21 2.07 2.56]
+[INFO] [1790594826.055656252] [kaya_ball_policy]: t  24.0s robot (+1.73,+0.07) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.48,-0.37,-1.00) | det 26 ms fit 2.23 deg yolo | scan L->R [3.   2.45 2.09 2.54 2.61 3.  ]
+[INFO] [1790594826.546648332] [kaya_ball_policy]: t  24.5s robot (+1.71,+0.02) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.22,-0.47,-1.00) | det 23 ms fit 2.23 deg yolo | scan L->R [2.2  2.61 2.59 0.71 0.35 0.41]
+[WARN] [1790594826.677461126] [kaya_ball_policy]: rejected (outside): fit 0.86 deg, area 6733 px at start-frame (+2.05,-0.32)
+[WARN] [1790594826.774548026] [kaya_ball_policy]: rejected (outside): fit 0.83 deg, area 14508 px at start-frame (+2.03,-0.33)
+[WARN] [1790594826.870033146] [kaya_ball_policy]: rejected (outside): fit 0.72 deg, area 26093 px at start-frame (+2.04,-0.31)
+[WARN] [1790594827.087408860] [kaya_ball_policy]: rejected (outside): fit 1.12 deg, area 21768 px at start-frame (+2.02,-0.30)
+[INFO] [1790594827.094051406] [kaya_ball_policy]: t  25.1s robot (+1.71,-0.03) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.26,-1.00,-1.00) | det 30 ms fit 2.23 deg yolo | scan L->R [2.69 0.7  0.33 0.37 3.   3.  ]
+[WARN] [1790594827.179426064] [kaya_ball_policy]: rejected (outside): fit 1.18 deg, area 20065 px at start-frame (+2.01,-0.32)
+[WARN] [1790594827.268986582] [kaya_ball_policy]: rejected (outside): fit 1.28 deg, area 17354 px at start-frame (+2.03,-0.32)
+[WARN] [1790594827.366158188] [kaya_ball_policy]: rejected (outside): fit 1.39 deg, area 17736 px at start-frame (+2.02,-0.33)
+[WARN] [1790594827.467404835] [kaya_ball_policy]: rejected (outside): fit 1.45 deg, area 18140 px at start-frame (+2.03,-0.32)
+[WARN] [1790594827.571576245] [kaya_ball_policy]: rejected (outside): fit 1.63 deg, area 18637 px at start-frame (+2.02,-0.34)
+[INFO] [1790594827.576438511] [kaya_ball_policy]: t  25.5s robot (+1.69,-0.08) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.10,+0.49,-0.57) | det 37 ms fit 2.23 deg yolo | scan L->R [3.   0.37 0.5  3.   3.   2.4 ]
+[WARN] [1790594827.667318110] [kaya_ball_policy]: rejected (outside): fit 1.76 deg, area 18644 px at start-frame (+2.04,-0.34)
+[WARN] [1790594827.764465780] [kaya_ball_policy]: rejected (outside): fit 1.77 deg, area 18336 px at start-frame (+2.03,-0.35)
+[WARN] [1790594827.862986292] [kaya_ball_policy]: rejected (outside): fit 0.83 deg, area 19757 px at start-frame (+2.04,-0.36)
+[WARN] [1790594827.962391825] [kaya_ball_policy]: rejected (outside): fit 0.80 deg, area 20840 px at start-frame (+2.04,-0.36)
+[WARN] [1790594828.062543749] [kaya_ball_policy]: rejected (outside): fit 0.89 deg, area 20432 px at start-frame (+2.04,-0.36)
+[INFO] [1790594828.068629380] [kaya_ball_policy]: t  26.0s robot (+1.73,-0.07) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.16,+0.95,+0.14) | det 42 ms fit 2.23 deg yolo | scan L->R [3.   0.48 0.45 0.45 3.   3.  ]
+[WARN] [1790594828.165576691] [kaya_ball_policy]: rejected (outside): fit 0.89 deg, area 20612 px at start-frame (+2.04,-0.36)
+[WARN] [1790594828.264358748] [kaya_ball_policy]: rejected (outside): fit 0.84 deg, area 19269 px at start-frame (+2.04,-0.36)
+[WARN] [1790594828.464682693] [kaya_ball_policy]: rejected (outside): fit 0.89 deg, area 18817 px at start-frame (+2.04,-0.37)
+[WARN] [1790594828.564694900] [kaya_ball_policy]: rejected (outside): fit 0.96 deg, area 20981 px at start-frame (+2.04,-0.36)
+[INFO] [1790594828.570595342] [kaya_ball_policy]: t  26.5s robot (+1.79,-0.05) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.19,-0.02,-1.00) | det 46 ms fit 2.23 deg yolo | scan L->R [3.   0.37 0.44 0.44 3.   0.63]
+[WARN] [1790594828.665034606] [kaya_ball_policy]: rejected (outside): fit 1.10 deg, area 21365 px at start-frame (+2.04,-0.36)
+[WARN] [1790594828.770139486] [kaya_ball_policy]: rejected (outside): fit 1.23 deg, area 17083 px at start-frame (+2.02,-0.38)
+[WARN] [1790594829.065970312] [kaya_ball_policy]: rejected (outside): fit 0.72 deg, area 20200 px at start-frame (+2.02,-0.30)
+[INFO] [1790594829.069114411] [kaya_ball_policy]: t  27.0s robot (+1.78,-0.06) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (+0.11,-0.58,-1.00) | det 48 ms fit 2.23 deg yolo | scan L->R [3.   0.85 3.   3.   0.56 3.  ]
+[WARN] [1790594829.253286711] [kaya_ball_policy]: rejected (outside): fit 0.33 deg, area 1297 px at start-frame (+2.05,-0.36)
+[INFO] [1790594829.577760552] [kaya_ball_policy]: t  27.5s robot (+1.74,-0.05) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.16,-1.00,-1.00) | det 51 ms fit 2.23 deg yolo | scan L->R [3.   3.   0.59 3.   0.4  3.  ]
+[INFO] [1790594829.581857993] [kaya_ball_policy]: t  27.6s robot (+1.74,-0.05) | ball mem 5.0s at (+1.95,+0.03) goal-frame (+0.38,+0.03) | action (-0.15,-1.00,-1.00) | det 51 ms fit 2.23 deg yolo | scan L->R [3.   3.   0.59 3.   0.4  3.  ]
+[INFO] [1790594830.542342339] [kaya_ball_policy]: t  28.5s robot (+1.68,+0.06) | ball SEEN at (+0.75,+0.12) goal-frame (-0.82,+0.12) | action (+0.83,+0.15,-0.33) | det 77 ms fit 0.53 deg round | scan L->R [3.  3.  3.  0.4 3.  3. ]
+[INFO] [1790594830.545840594] [kaya_ball_policy]: t  28.5s robot (+1.68,+0.06) | ball SEEN at (+0.75,+0.12) goal-frame (-0.82,+0.12) | action (+0.97,-0.16,-0.14) | det 77 ms fit 0.53 deg round | scan L->R [3.  3.  3.  0.4 3.  3. ]
+[WARN] [1790594831.071792719] [kaya_ball_policy]: rejected (fit): fit 10.13 deg, area 38143 px
+[INFO] [1790594831.113432495] [kaya_ball_policy]: t  29.1s robot (+1.66,+0.06) | ball mem 0.4s at (+1.11,-0.64) goal-frame (-0.46,-0.64) | action (+0.29,+1.00,+1.00) | det 87 ms fit 0.62 deg round | scan L->R [3.   3.   0.39 0.38 0.65 1.44]
+[WARN] [1790594831.368197419] [kaya_ball_policy]: rejected (fit): fit 11.03 deg, area 44576 px
+[WARN] [1790594831.582457611] [kaya_ball_policy]: rejected (fit): fit 9.98 deg, area 48736 px
+[WARN] [1790594831.788607019] [kaya_ball_policy]: rejected (fit): fit 9.51 deg, area 39827 px
+[WARN] [1790594831.979393063] [kaya_ball_policy]: rejected (fit): fit 8.16 deg, area 41373 px
+[WARN] [1790594832.185700492] [kaya_ball_policy]: rejected (fit): fit 5.84 deg, area 32653 px
+[WARN] [1790594832.376206368] [kaya_ball_policy]: rejected (fit): fit 5.22 deg, area 31255 px
+[INFO] [1790594832.529939564] [kaya_ball_policy]: t  30.5s robot (+1.57,-0.07) | ball mem 1.2s at (+1.28,-0.56) goal-frame (-0.29,-0.56) | action (+0.89,-1.00,+0.66) | det 98 ms fit 1.16 deg round | scan L->R [3.   0.59 0.48 3.   3.   3.  ]
+[INFO] [1790594833.029804948] [kaya_ball_policy]: t  31.0s robot (+1.50,-0.13) | ball SEEN at (+1.22,-1.19) goal-frame (-0.35,-1.19) | action (+1.00,-1.00,-0.11) | det 110 ms fit 1.08 deg round | scan L->R [3.   3.   0.52 3.   3.   3.  ]
+[WARN] [1790594833.567890704] [kaya_ball_policy]: rejected (outside): fit 0.36 deg, area 199 px at start-frame (+0.92,-3.11)
+[INFO] [1790594833.575030577] [kaya_ball_policy]: t  31.5s robot (+1.40,-0.21) | ball mem 0.1s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.93,-1.00,+0.04) | det 85 ms fit 0.77 deg round | scan L->R [3.   3.   0.49 3.   3.   3.  ]
+[INFO] [1790594833.627155387] [kaya_ball_policy]: t  31.6s robot (+1.38,-0.23) | ball mem 0.1s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.81,-1.00,+0.03) | det 85 ms fit 0.77 deg round | scan L->R [3.   3.   3.   0.41 3.   3.  ]
+[INFO] [1790594834.091649288] [kaya_ball_policy]: t  32.1s robot (+1.37,-0.24) | ball mem 0.6s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.91,-1.00,+0.03) | det 92 ms fit 0.77 deg round | scan L->R [3.   3.   0.47 3.   3.   3.  ]
+[INFO] [1790594834.095582596] [kaya_ball_policy]: t  32.1s robot (+1.37,-0.24) | ball mem 0.6s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.91,-1.00,+0.03) | det 92 ms fit 0.77 deg round | scan L->R [3.   3.   0.47 3.   3.   3.  ]
+[INFO] [1790594834.580104168] [kaya_ball_policy]: t  32.6s robot (+1.25,-0.35) | ball mem 1.1s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.83,-1.00,+0.21) | det 91 ms fit 0.77 deg round | scan L->R [3.   3.   3.   0.38 3.   3.  ]
+[INFO] [1790594835.119636018] [kaya_ball_policy]: t  33.1s robot (+1.18,-0.42) | ball mem 1.6s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.87,-1.00,+0.15) | det 96 ms fit 0.77 deg round | scan L->R [3.   3.   3.   0.44 3.   3.  ]
+[INFO] [1790594835.123221539] [kaya_ball_policy]: t  33.1s robot (+1.18,-0.42) | ball mem 1.6s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.86,-1.00,+0.16) | det 96 ms fit 0.77 deg round | scan L->R [3.   3.   3.   0.44 3.   3.  ]
+[INFO] [1790594835.569649239] [kaya_ball_policy]: t  33.5s robot (+1.12,-0.49) | ball mem 2.1s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.80,-1.00,+0.23) | det 100 ms fit 0.77 deg round | scan L->R [3.   0.41 3.   0.41 3.   3.  ]
+[INFO] [1790594836.119954612] [kaya_ball_policy]: t  34.1s robot (+1.08,-0.56) | ball mem 2.6s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.90,-1.00,+0.10) | det 94 ms fit 0.77 deg round | scan L->R [3.   0.39 0.37 0.39 3.   3.  ]
+[INFO] [1790594836.552532851] [kaya_ball_policy]: t  34.5s robot (+1.03,-0.65) | ball mem 3.1s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.94,-1.00,+0.13) | det 104 ms fit 0.77 deg round | scan L->R [3.   0.37 0.35 0.36 0.39 3.  ]
+[INFO] [1790594836.556508336] [kaya_ball_policy]: t  34.5s robot (+1.03,-0.65) | ball mem 3.1s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.93,-1.00,+0.13) | det 104 ms fit 0.77 deg round | scan L->R [3.   0.37 0.35 0.36 0.39 3.  ]
+[INFO] [1790594837.110694504] [kaya_ball_policy]: t  35.1s robot (+0.98,-0.76) | ball mem 3.6s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.93,-1.00,+0.14) | det 114 ms fit 0.77 deg round | scan L->R [3.   0.35 0.32 0.32 0.35 3.  ]
+[INFO] [1790594837.550690897] [kaya_ball_policy]: t  35.5s robot (+0.95,-0.86) | ball mem 4.1s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+1.00,-1.00,+0.00) | det 84 ms fit 0.77 deg round | scan L->R [3. 3. 3. 3. 3. 3.]
+[INFO] [1790594838.054423474] [kaya_ball_policy]: t  36.0s robot (+0.92,-0.96) | ball mem 4.6s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+1.00,-0.74,-0.00) | det 68 ms fit 0.77 deg round | scan L->R [3.   3.   3.   3.   3.   0.82]
+[INFO] [1790594838.549367903] [kaya_ball_policy]: t  36.5s robot (+0.90,-1.06) | ball mem 5.0s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+1.00,-1.00,+0.41) | det 56 ms fit 0.77 deg round | scan L->R [3. 3. 3. 3. 3. 3.]
+[INFO] [1790594838.626681507] [kaya_ball_policy]: t  36.6s robot (+0.90,-1.08) | ball mem 5.0s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+1.00,-1.00,+0.43) | det 56 ms fit 0.77 deg round | scan L->R [3. 3. 3. 3. 3. 3.]
+[INFO] [1790594839.046363308] [kaya_ball_policy]: t  37.0s robot (+0.89,-1.16) | ball mem 5.0s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+1.00,-1.00,+0.32) | det 42 ms fit 0.77 deg round | scan L->R [3. 3. 3. 3. 3. 3.]
+[INFO] [1790594839.552743297] [kaya_ball_policy]: t  37.5s robot (+0.88,-1.26) | ball mem 5.0s at (+1.17,-1.88) goal-frame (-0.40,-1.88) | action (+0.29,-0.90,+0.02) | det 23 ms fit 0.77 deg round | scan L->R [3. 3. 3. 3. 3. 3.]
+[INFO] [1790594841.578912041] [kaya_ball_policy]: t  39.5s robot (+0.82,-1.44) | ball SEEN at (+1.16,-1.14) goal-frame (-0.41,-1.14) | action (-0.05,+1.00,+1.00) | det 22 ms fit 0.56 deg round | scan L->R [0.82 3.   3.   3.   3.   3.  ]
+[INFO] [1790594842.075128510] [kaya_ball_policy]: t  40.0s robot (+0.81,-1.40) | ball SEEN at (+1.16,-1.10) goal-frame (-0.41,-1.10) | action (+1.00,+0.26,+1.00) | det 28 ms fit 0.94 deg round | scan L->R [3.   0.5  0.31 3.   3.   3.  ]
+[INFO] [1790594842.573868642] [kaya_ball_policy]: t  40.5s robot (+0.88,-1.39) | ball SEEN at (+1.14,-1.13) goal-frame (-0.43,-1.13) | action (+1.00,-1.00,+1.00) | det 36 ms fit 1.31 deg round | scan L->R [3.   0.41 3.   3.   3.   3.  ]
+[INFO] [1790594843.075192343] [kaya_ball_policy]: t  41.0s robot (+0.97,-1.37) | ball SEEN at (+1.18,-1.13) goal-frame (-0.39,-1.13) | action (+1.00,-1.00,+0.98) | det 43 ms fit 0.66 deg near | scan L->R [2.72 0.38 0.35 0.36 3.   3.  ]
+[INFO] [1790594843.598936943] [kaya_ball_policy]: t  41.6s robot (+1.05,-1.31) | ball SEEN at (+1.20,-1.08) goal-frame (-0.37,-1.08) | action (+1.00,-1.00,+0.25) | det 51 ms fit 2.13 deg near | scan L->R [3.   2.89 0.31 0.32 3.   3.  ]
+[INFO] [1790594844.104970937] [kaya_ball_policy]: t  42.1s robot (+1.12,-1.24) | ball SEEN at (+1.27,-0.97) goal-frame (-0.30,-0.97) | action (+1.00,-1.00,-0.00) | det 57 ms fit 3.00 deg near | scan L->R [3.   3.   0.31 0.31 3.   3.  ]
+[INFO] [1790594844.600108204] [kaya_ball_policy]: t  42.6s robot (+1.20,-1.17) | ball SEEN at (+1.36,-0.90) goal-frame (-0.21,-0.90) | action (+1.00,-1.00,-0.18) | det 63 ms fit 1.20 deg near | scan L->R [3.   3.   0.31 0.31 3.   2.41]
+[INFO] [1790594845.101066966] [kaya_ball_policy]: t  43.1s robot (+1.27,-1.10) | ball SEEN at (+1.46,-0.84) goal-frame (-0.11,-0.84) | action (+0.96,-1.00,-0.37) | det 70 ms fit 0.75 deg near | scan L->R [3.   3.   0.31 0.31 0.64 3.  ]
+[INFO] [1790594845.603564401] [kaya_ball_policy]: t  43.6s robot (+1.35,-1.04) | ball SEEN at (+1.52,-0.85) goal-frame (-0.05,-0.85) | action (+1.00,-1.00,+0.06) | det 74 ms fit 1.57 deg near | scan L->R [3.   3.   0.31 0.31 0.43 3.  ]
+[INFO] [1790594845.625877360] [kaya_ball_policy]: t  43.6s robot (+1.37,-1.03) | ball SEEN at (+1.52,-0.85) goal-frame (-0.05,-0.85) | action (+1.00,-1.00,+0.06) | det 74 ms fit 1.57 deg near | scan L->R [3.   3.   0.31 0.31 3.   3.  ]
+[INFO] [1790594846.101432377] [kaya_ball_policy]: t  44.1s robot (+1.44,-0.98) | ball SEEN at (+1.56,-0.81) goal-frame (-0.01,-0.81) | action (+1.00,-1.00,+0.25) | det 76 ms fit 0.72 deg near | scan L->R [3.   3.   0.31 0.31 3.   3.  ]
+[INFO] [1790594846.602313537] [kaya_ball_policy]: t  44.6s robot (+1.52,-0.91) | ball SEEN at (+1.69,-0.64) goal-frame (+0.12,-0.64) | action (+1.00,-1.00,-0.25) | det 76 ms fit 1.65 deg near | scan L->R [3.   3.   0.31 0.31 3.   3.  ]
+[INFO] [1790594846.625635744] [kaya_ball_policy]: t  44.6s robot (+1.53,-0.90) | ball SEEN at (+1.69,-0.64) goal-frame (+0.12,-0.64) | action (+1.00,-1.00,-0.13) | det 76 ms fit 1.65 deg near | scan L->R [3.   3.   3.   0.31 3.   3.  ]
+[INFO] [1790594847.107099780] [kaya_ball_policy]: t  45.1s robot (+1.60,-0.85) | ball SEEN at (+1.78,-0.61) goal-frame (+0.21,-0.61) | action (+1.00,-1.00,-0.03) | det 76 ms fit 1.22 deg near | scan L->R [3.   3.   3.   0.31 3.   3.  ]
+[INFO] [1790594847.607562142] [kaya_ball_policy]: t  45.6s robot (+1.68,-0.78) | ball SEEN at (+1.85,-0.54) goal-frame (+0.28,-0.54) | action (+1.00,-1.00,+0.03) | det 77 ms fit 1.42 deg near | scan L->R [3.   3.   3.   0.31 3.   3.  ]
+[INFO] [1790594848.104238145] [kaya_ball_policy]: t  46.1s robot (+1.75,-0.70) | ball SEEN at (+1.89,-0.43) goal-frame (+0.32,-0.43) | action (+1.00,-1.00,+0.01) | det 76 ms fit 1.55 deg near | scan L->R [3.   3.   3.   0.31 3.   3.  ]
+[WARN] [1790594848.593645311] [kaya_ball_policy]: rejected (outside): fit 1.12 deg, area 26370 px at start-frame (+1.99,-0.36)
+[INFO] [1790594848.599252880] [kaya_ball_policy]: t  46.6s robot (+1.83,-0.63) | ball mem 0.1s at (+1.96,-0.40) goal-frame (+0.39,-0.40) | action (+0.73,-0.66,-0.31) | det 76 ms fit 1.86 deg near | scan L->R [3.   3.   0.31 0.31 3.   3.  ]
+[WARN] [1790594848.694133758] [kaya_ball_policy]: rejected (outside): fit 1.12 deg, area 24821 px at start-frame (+2.01,-0.36)
+[WARN] [1790594848.793649438] [kaya_ball_policy]: rejected (outside): fit 1.23 deg, area 27843 px at start-frame (+2.00,-0.37)
+[WARN] [1790594848.897615786] [kaya_ball_policy]: rejected (outside): fit 1.83 deg, area 24838 px at start-frame (+2.03,-0.36)
+[WARN] [1790594848.992149837] [kaya_ball_policy]: rejected (outside): fit 0.95 deg, area 26914 px at start-frame (+1.99,-0.38)
+[WARN] [1790594849.089041498] [kaya_ball_policy]: rejected (outside): fit 1.17 deg, area 28291 px at start-frame (+2.02,-0.33)
+[INFO] [1790594849.095236989] [kaya_ball_policy]: t  47.1s robot (+1.87,-0.57) | ball mem 0.6s at (+1.96,-0.40) goal-frame (+0.39,-0.40) | action (+0.65,+0.30,+0.94) | det 76 ms fit 1.86 deg near | scan L->R [3.   3.   3.   0.31 3.   3.  ]
+[WARN] [1790594849.193588857] [kaya_ball_policy]: rejected (outside): fit 1.43 deg, area 27367 px at start-frame (+2.02,-0.30)
+[WARN] [1790594849.296429121] [kaya_ball_policy]: rejected (outside): fit 1.51 deg, area 25248 px at start-frame (+2.00,-0.32)
+[WARN] [1790594849.389961893] [kaya_ball_policy]: rejected (outside): fit 1.24 deg, area 26957 px at start-frame (+1.98,-0.27)
+[INFO] [1790594849.588511829] [kaya_ball_policy]: t  47.6s robot (+1.82,-0.55) | ball mem 0.1s at (+1.96,-0.23) goal-frame (+0.39,-0.23) | action (+0.71,+0.13,-0.78) | det 74 ms fit 2.74 deg near | scan L->R [3.   3.   2.89 0.31 0.33 3.  ]
+[INFO] [1790594850.083397728] [kaya_ball_policy]: t  48.1s robot (+1.80,-0.50) | ball SEEN at (+1.87,-0.24) goal-frame (+0.30,-0.24) | action (+0.97,+0.54,-0.33) | det 68 ms fit 2.84 deg near | scan L->R [3.   3.   2.74 0.31 0.33 3.  ]
+[WARN] [1790594850.373023271] [kaya_ball_policy]: rejected (fit): fit 6.32 deg, area 45872 px
+[INFO] [1790594850.580260649] [kaya_ball_policy]: t  48.6s robot (+1.75,-0.42) | ball SEEN at (+1.88,-0.24) goal-frame (+0.31,-0.24) | action (+0.99,+1.00,-0.56) | det 65 ms fit 2.53 deg near | scan L->R [3.   2.63 3.   0.31 3.   3.  ]
+[INFO] [1790594851.075395100] [kaya_ball_policy]: t  49.0s robot (+1.72,-0.34) | ball SEEN at (+1.83,-0.19) goal-frame (+0.26,-0.19) | action (+1.00,+1.00,-0.20) | det 59 ms fit 4.44 deg near | scan L->R [2.36 0.37 0.31 0.31 3.   0.42]
+[INFO] [1790594851.173845722] [kaya_ball_policy]: t  49.1s robot (+1.71,-0.32) | ball SEEN at (+1.82,-0.18) goal-frame (+0.25,-0.18) | action (+0.87,+0.49,-0.27) | det 58 ms fit 4.86 deg near | scan L->R [2.24 3.   0.31 3.   3.   3.  ]
+[WARN] [1790594851.175317032] [kaya_ball_policy]: STOP: SCORED after 49.1 s (192 detections, rejected {'fit': 21, 'outside': 68}, odometry steps from {'vslam': 134, 'wheel': 372})

@@ -516,6 +516,56 @@ cannot pull a ball, so recovering one from a wall needs different skills:
 - The same detector interface (YOLO + sphere fit), so the robot node is
   unchanged.
 
+**Built 2026-09-28: `Kaya-BallGoal-V2-v0`** (`tasks/ball_goal/ball_goal_v2_env.py`,
+config in `ball_goal_env_cfg.py`):
+- **Room:** 4 walls; the box stays on the +x wall; the back wall is 1.5-3.0 m
+  back and each side wall 1.2-1.9 m out, redrawn every episode (kinematic
+  walls).
+- **Obstacles:** 4 slots, 15 / 22 / 28 / 35 cm cubes, 30 cm tall. Each is
+  present with probability 0.2 (level 0) to 0.7 (level 1), placed clear of
+  the ball, the robot and the goal mouth.
+- **Wall starts:** up to 40% of starts (by level) put the ball against a wall
+  or in a corner, including the corners by the goal wall.
+- **Depth scan:** 16 rays over the 92 deg view, level, at camera height
+  (passes over the 14 cm ball), max 3 m, 2% noise. Analytic (walls and
+  slab-tested boxes), verified against brute-force ray marching to 0.2 cm.
+  On the robot: the depth image row that looks level.
+- **Observations:** 31 (B2's 15 + scan); critic 35. Network 256-128-64.
+- **Extra rewards:** ball speed above 0.3 m/s (-0.3 per m/s); robot within
+  3 cm of a wall or obstacle (-0.1 per step).
+- A config class must live in the config-only module: Isaac Lab imports it
+  before the simulator starts, and an env module there (it imports USD)
+  crashed SimulationApp at startup.
+
+**v2 / v2.1 on the real robot (2026-09-28, logs in data/b5_runs_20260928):**
+
+    run  policy  setup                    result
+    8    B2 slow straight                 SCORED 15.4 s (re-inflated ball)
+    9    v2      straight                 SCORED  9.2 s
+    10   v2      straight                 SCORED  9.8 s
+    11   v2      ball at right wall       SCORED 13.7 s (freed it from the wall)
+    12a  v2      corner beside the box    no - ball missed 33 s (YOLO at exactly 0.30)
+    12b  v2      corner beside the box    FALSE goal (ball against the side panel)
+    12c  v2      corner beside the box    FALSE goal (odometry drift)
+    13   v2.1    corner beside the box    SCORED 30.6 s, but the node did not stop
+    14   v2.1    corner beside the box    no - ball knocked away; FALSE goal again
+
+- Detector fixes: YOLO 0.15 (still gated by the sphere fit); any colour blob
+  that fits as a sphere to 1.5 deg.
+- Scored check: inside-the-box lane (|y| < half_w - r + 3 cm) AND seen in
+  front of the mouth first.
+- **Localisation is now the bottleneck.** cuVSLAM loses tracking with the
+  camera up against plain cardboard or wall (runs 13 and 14), and wheel odometry
+  drifts 20-30 cm under hard strafing. Fused odometry (cuVSLAM, falling back
+  to the wheels on a jump or a lost height) helps, but not up close.
+- **Next: see the goal.** A printed ArUco marker (DICT_4X4_50, ID 0, 150 mm;
+  `data/aruco/`) on the box's inside back panel gives the box pose directly;
+  between sightings, carry it with odometry (like the ball's memory). No
+  retraining: the policy still gets "goal point, goal direction".
+- v2.1 = v2 + jam penalty (-0.2 per step pushing a jammed ball) +
+  side-panel starts (30% of wall starts); 99% in sim.
+  `kaya_ball_v2/2026-09-28_16-14-37_v21/model_400.pt`.
+
 **Speed:** the user found 0.15 m/s a bit fast (the ball runs away). Retrain
 or fine-tune at a lower top speed rather than scaling actions down on the
 robot. First try: a 0.10 m/s fine-tune (`run_name slow010`).

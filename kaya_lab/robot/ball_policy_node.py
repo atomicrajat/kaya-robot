@@ -42,6 +42,8 @@ from numpy_policy import NumpyPolicy
 
 MAX_LIN, MAX_ANG = 0.15, 1.0          # drive node limits; the policy was trained on these
 AGE_CAP_S = 5.0                       # as in training
+FUSE_JUMP_M = 0.05                    # per 0.1 s step: 0.5 m/s of disagreement = a visual jump
+FUSE_JUMP_RAD = math.radians(8.0)
 BASE_LINK_Z = 0.037                   # base_link above the floor (wheel radius)
 
 
@@ -107,8 +109,20 @@ class BallPolicyNode(Node):
         self.create_subscription(CameraInfo, "/camera/color/camera_info", self.on_info, 10)
         self.odom_source = P("odom_source", "wheel").value          # "wheel" or "vslam"
         self.odom_hist = []                                          # (stamp ns, xy, yaw), wheel odometry
-        odom_topic = "/odom" if self.odom_source == "wheel" else "/visual_slam/tracking/odometry"
-        self.create_subscription(Odometry, odom_topic, self.on_odom, 10 if self.odom_source == "wheel" else best_effort)
+        wheel = self.odom_source in ("wheel", "fused")
+        odom_topic = "/odom" if wheel else "/visual_slam/tracking/odometry"
+        self.create_subscription(Odometry, odom_topic, self.on_odom, 10 if wheel else best_effort)
+        self.fused, self.fused_hist, self.n_fuse = None, [], {"vslam": 0, "wheel": 0}
+        self.vio_z0, self.vio_dead = None, False
+        # v2 policies also get a 16-ray depth scan (depth_scan.py); needs the depth stream on
+        self.use_scan = P("use_scan", False).value
+        self.scanner = None
+        self.depth_K = None
+        self.latest_depth = None
+        self.last_scan = np.full(16, 3.0)
+        if self.use_scan:
+            self.create_subscription(Image, "/camera/depth/image_raw", self.on_depth, best_effort)
+            self.create_subscription(CameraInfo, "/camera/depth/camera_info", self.on_depth_info, 10)
 
         self.K = self.D = None
         self.detector = None
@@ -127,6 +141,7 @@ class BallPolicyNode(Node):
         self.last_fit = (0.0, 0)
         self.last_src = ""
         self.prev_p = None
+        self.seen_in_front = False                    # the ball was in front of the mouth, within the posts
         self.det_ms = []
         self.create_timer(0.1, self.step)             # 10 Hz, as trained
         self.get_logger().info(f"policy loaded; goal mouth at {self.goal_xy} m, into-box yaw "
@@ -142,7 +157,7 @@ class BallPolicyNode(Node):
     def on_odom(self, msg):
         t = msg.twist.twist
         self.twist_b = np.array([t.linear.x, t.linear.y, t.angular.z])
-        if self.odom_source == "wheel":
+        if self.odom_source in ("wheel", "fused"):
             q, p = msg.pose.pose.orientation, msg.pose.pose.position
             self.odom_hist.append((Time.from_msg(msg.header.stamp).nanoseconds, np.array([p.x, p.y]), yaw_of(q)))
             if len(self.odom_hist) > 200:
@@ -151,10 +166,85 @@ class BallPolicyNode(Node):
     def on_image(self, msg):
         self.latest_img = msg
 
+    def on_depth_info(self, msg):
+        if self.depth_K is None:
+            self.depth_K = np.array(msg.k).reshape(3, 3)
+
+    def on_depth(self, msg):
+        self.latest_depth = msg
+
+    def depth_scan(self):
+        """The 16 distances (m) from the newest depth frame; the last scan if none is new."""
+        msg, self.latest_depth = self.latest_depth, None
+        if msg is None or self.scanner is None:
+            return self.last_scan
+        dtype = np.uint16 if "16" in msg.encoding else np.float32
+        d = np.frombuffer(msg.data, dtype=dtype).reshape(msg.height, msg.width).astype(np.float64)
+        if dtype == np.uint16:
+            d = d / 1000.0                                         # 16UC1 is millimetres
+        self.last_scan = self.scanner.scan(d)
+        return self.last_scan
+
+    def update_fused(self):
+        """Fused odometry, once per control step. Wheels drift when the omni rollers slip
+        under hard strafing (20-30 cm after ~40 s, runs 12c and 13: the robot did not know
+        the ball was already in the box). cuVSLAM is accurate but can JUMP with the camera
+        facing a plain wall (runs 4-5). So: each step, compare the two sources' motion in
+        the robot's own frame; trust cuVSLAM, unless it disagrees with the wheels by more
+        than FUSE_JUMP_M, which only a jump can do; then take the wheels' step."""
+        if not self.odom_hist:
+            return False
+        _, pw, yw = self.odom_hist[-1]
+        try:
+            t = self.tf.lookup_transform("odom", "base_link", Time())
+            pv, yv = np.array([t.transform.translation.x, t.transform.translation.y]), yaw_of(t.transform.rotation)
+            # Kaya lives on the floor: cuVSLAM's height leaving it means tracking is LOST
+            # (after run 13 it read z = 20 km, integrating IMU noise). Lost may also drift in
+            # small steps that pass the jump test, so it is dropped for the rest of the run.
+            z = t.transform.translation.z
+            if self.vio_z0 is None:
+                self.vio_z0 = z
+            if abs(z - self.vio_z0) > 0.10 and not self.vio_dead:
+                self.vio_dead = True
+                self.get_logger().warn(f"cuVSLAM height moved {z - self.vio_z0:+.2f} m: tracking lost, wheels only")
+            if self.vio_dead:
+                pv = None
+        except tf2_ros.TransformException:
+            pv = None
+        if self.fused is None:
+            self.fused = (np.zeros(2), 0.0)
+            self.prev_w, self.prev_v = (pw, yw), ((pv, yv) if pv is not None else None)
+        else:
+            dw = rot(-self.prev_w[1]) @ (pw - self.prev_w[0])
+            dyw = math.remainder(yw - self.prev_w[1], 2 * math.pi)
+            use_v = pv is not None and self.prev_v is not None
+            if use_v:
+                dv = rot(-self.prev_v[1]) @ (pv - self.prev_v[0])
+                dyv = math.remainder(yv - self.prev_v[1], 2 * math.pi)
+                use_v = np.linalg.norm(dv - dw) < FUSE_JUMP_M and abs(dyv - dyw) < FUSE_JUMP_RAD
+            d, dy = (dv, dyv) if use_v else (dw, dyw)
+            self.n_fuse["vslam" if use_v else "wheel"] += 1
+            p, yaw = self.fused
+            self.fused = (p + rot(yaw) @ d, yaw + dy)
+            self.prev_w, self.prev_v = (pw, yw), ((pv, yv) if pv is not None else None)
+        self.fused_hist.append((self.get_clock().now().nanoseconds, self.fused[0].copy(), self.fused[1]))
+        if len(self.fused_hist) > 100:
+            self.fused_hist.pop(0)
+        return True
+
     def pose(self, stamp=None):
         """base_link in odom: (x, y, yaw), at stamp if given. From the wheel encoders
-        (drive_node /odom: drifts slowly, never jumps) or from cuVSLAM via TF (jumped
-        0.3-2 m twice with the camera up against a plain wall, runs 4-5)."""
+        (drive_node /odom: drifts slowly, never jumps), from cuVSLAM via TF (jumped
+        0.3-2 m twice with the camera up against a plain wall, runs 4-5), or fused."""
+        if self.odom_source == "fused":
+            if not self.fused_hist:
+                raise tf2_ros.TransformException("no fused odometry yet")
+            if stamp is None:
+                _, p, yaw = self.fused_hist[-1]
+            else:
+                ns = Time.from_msg(stamp).nanoseconds
+                _, p, yaw = min(self.fused_hist, key=lambda h: abs(h[0] - ns))
+            return p.copy(), yaw
         if self.odom_source == "wheel":
             if not self.odom_hist:
                 raise tf2_ros.TransformException("no wheel odometry yet")
@@ -170,6 +260,8 @@ class BallPolicyNode(Node):
         return np.array([p.x, p.y]), yaw_of(t.transform.rotation)
 
     def ensure_ready(self):
+        if self.odom_source == "fused" and not self.update_fused():
+            return False
         if self.detector is None and self.K is not None:
             try:
                 T = tf_matrix(self.tf.lookup_transform("base_link", "camera_color_optical_frame", Time()))
@@ -177,6 +269,16 @@ class BallPolicyNode(Node):
                 return False
             self.detector = BallDetector(self.K, self.D, T, self.r, self.r - BASE_LINK_Z, yolo=self.yolo)
             self.get_logger().info(f"detector ready; colour lens in base_link at {np.round(T[:3, 3], 3)}")
+        if self.use_scan and self.scanner is None:
+            if self.depth_K is None:
+                return False
+            try:
+                Td = tf_matrix(self.tf.lookup_transform("base_link", "camera_depth_optical_frame", Time()))
+            except tf2_ros.TransformException:
+                return False
+            from depth_scan import DepthScan
+            self.scanner = DepthScan(self.depth_K, Td)
+            self.get_logger().info(f"depth scan ready; depth lens in base_link at {np.round(Td[:3, 3], 3)}")
         if self.start is None:
             try:
                 p, yaw = self.pose()
@@ -233,6 +335,7 @@ class BallPolicyNode(Node):
     def step(self):
         if self.done or not self.ensure_ready():
             return
+        # (ensure_ready already advanced the fused odometry for this step)
         if self.t0 is None:
             self.t0 = time.time()
         # "seen" = the latest camera FRAME contained the ball; a step with no new frame
@@ -283,12 +386,22 @@ class BallPolicyNode(Node):
             [self.twist_b[2] / MAX_ANG],
             self.action,
         ])
+        if self.use_scan:                                  # v2: + the 16-ray depth scan, / 3 m as in training
+            obs = np.concatenate([obs, self.depth_scan() / 3.0])
         self.action = np.clip(self.policy(obs), -1.0, 1.0)
 
         # stop conditions
         t = time.time() - self.t0
         p_s = rot(-syaw) @ (p - sp)                        # robot in the start frame
-        scored = self.ever_seen and self.age < 1.0 and b_g[0] > self.r and abs(b_g[1]) < self.half_w
+        # Scored = inside the box AND in through the mouth. Inside, the ball's centre is at most
+        # half_w - r (16 cm) off-centre; against the OUTSIDE of a side panel it is >= ~31 cm.
+        # The first rule (< half_w, 23 cm) sat between the two, and in run 12b a ball pushed
+        # along the wall into the outside of a side panel counted as a goal.
+        in_lane = abs(b_g[1]) < self.half_w - self.r + 0.03
+        if self.ever_seen and b_g[0] < 0.0 and in_lane:
+            self.seen_in_front = True
+        scored = (self.ever_seen and self.age < 1.0 and b_g[0] > self.r and in_lane
+                  and self.seen_in_front)
         left = p_s[0] < -self.arena[0] or abs(p_s[1]) > self.arena[1] or p_s[0] > self.goal_xy[0] + 0.5
         reason = "SCORED" if scored else "time limit" if t > self.max_time else "left the arena" if left else None
 
@@ -305,10 +418,12 @@ class BallPolicyNode(Node):
                 f"t {t:5.1f}s robot ({p_s[0]:+.2f},{p_s[1]:+.2f}) | ball {'SEEN' if self.seen_now else f'mem {self.age:.1f}s' if self.ever_seen else 'never seen'}"
                 f" at ({ball_s[0]:+.2f},{ball_s[1]:+.2f}) goal-frame ({b_g[0]:+.2f},{b_g[1]:+.2f}) | action "
                 f"({self.action[0]:+.2f},{self.action[1]:+.2f},{self.action[2]:+.2f}) | det {np.mean(self.det_ms[-20:]) if self.det_ms else 0:.0f} ms"
-                f" fit {self.last_fit[0]:.2f} deg {self.last_src}")
+                f" fit {self.last_fit[0]:.2f} deg {self.last_src}"
+                + (f" | scan L->R {np.round(self.last_scan[::3], 2)}" if self.use_scan else ""))
         if reason:
             self.done = True
-            self.get_logger().warn(f"STOP: {reason} after {t:.1f} s ({self.n_det} detections, rejected {self.n_reject})")
+            self.get_logger().warn(f"STOP: {reason} after {t:.1f} s ({self.n_det} detections, rejected {self.n_reject}"
+                                   + (f", odometry steps from {self.n_fuse}" if self.odom_source == "fused" else "") + ")")
             raise SystemExit
 
     def stop(self):

@@ -66,6 +66,7 @@ class KayaBallGoalEnv(DirectRLEnv):
         spawn_goal("/World/envs/env_0", self.cfg.goal_line_x)
         span = self.cfg.scene.env_spacing * math.ceil(math.sqrt(self.cfg.scene.num_envs)) + 20.0
         spawn_ground_plane(prim_path="/World/ground", cfg=floor_cfg(size=(span, span)))
+        self._add_scene_objects()                  # v2: room walls and obstacles (before cloning)
         self.scene.clone_environments(copy_from_source=False)
         self.scene.filter_collisions(global_prim_paths=["/World/ground"])
         self.scene.articulations["kaya"] = self.robot
@@ -173,6 +174,20 @@ class KayaBallGoalEnv(DirectRLEnv):
             self._sums[k] += v
         return torch.stack(list(r.values())).sum(0)
 
+    # ------------------------------------------------------------- v2 hooks
+    def _add_scene_objects(self):
+        """Extra objects in env_0 before cloning (v2: room walls, obstacles)."""
+
+    def _placement_limits(self, env_ids):
+        """Where starts may go, per env: (x_min, y_min, y_max) tensors in the env frame."""
+        n = len(env_ids)
+        f = lambda v: torch.full((n,), float(v), device=self.device)  # noqa: E731
+        return f(self.cfg.arena_x[0]), f(self.cfg.arena_y[0]), f(self.cfg.arena_y[1])
+
+    def _adjust_ball_start(self, env_ids, bx, by):
+        """v2 moves some balls against walls or into corners."""
+        return bx, by
+
     # ------------------------------------------------------------------ reset
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None or len(env_ids) == self.num_envs:
@@ -220,25 +235,43 @@ class KayaBallGoalEnv(DirectRLEnv):
             return lo + (hi - lo) * torch.rand(n, device=dev)
 
         origins = self.scene.env_origins[env_ids]
+        x_lo, y_lo, y_hi = self._placement_limits(env_ids)     # per env; v2 = the room walls
         # ball: in front of the goal
         bx = cfg.goal_line_x - U(cfg.ball_goal_dist[0], lerp(cfg.ball_goal_dist, L))
         hw = lerp(cfg.ball_half_width, L)
         by = U(-hw, hw)
-        bx = bx.clamp(cfg.arena_x[0] + 0.3, cfg.goal_line_x - 0.2)
+        bx = torch.maximum(torch.minimum(bx, torch.full_like(bx, cfg.goal_line_x - 0.2)), x_lo + 0.15)
+        by = torch.maximum(torch.minimum(by, y_hi - 0.15), y_lo + 0.15)
+        bx, by = self._adjust_ball_start(env_ids, bx, by)       # v2: against walls, in corners
         # robot: behind the ball (away from the goal), rotated off that line by up to +-side_angle
         g = torch.stack([torch.full_like(bx, cfg.goal_line_x), torch.zeros_like(by)], 1)
         away = torch.atan2(by - g[:, 1], bx - g[:, 0])                 # direction goal -> ball
         side = math.radians(lerp(cfg.robot_side_angle_deg, L))
         ang = away + U(-side, side)
         dist = U(cfg.robot_ball_dist[0], lerp(cfg.robot_ball_dist, L))
-        rx = (bx + dist * torch.cos(ang)).clamp(cfg.arena_x[0] + 0.3, cfg.goal_line_x - 0.35)
-        ry = (by + dist * torch.sin(ang)).clamp(cfg.arena_y[0] + 0.3, cfg.arena_y[1] - 0.3)
+        rx = torch.maximum(torch.minimum(bx + dist * torch.cos(ang), torch.full_like(bx, cfg.goal_line_x - 0.35)),
+                           x_lo + 0.3)
+        ry = torch.maximum(torch.minimum(by + dist * torch.sin(ang), y_hi - 0.3), y_lo + 0.3)
         # after clamping, keep at least 0.30 m between robot and ball centres
         dx, dy = rx - bx, ry - by
         d = torch.sqrt(dx**2 + dy**2).clamp(min=1e-6)
         too_close = d < 0.30
         rx = torch.where(too_close, bx - 0.30, rx)
         ry = torch.where(too_close, by, ry)
+        # still too close (a ball against the back wall): put the robot beside it instead
+        d = torch.sqrt((rx - bx) ** 2 + (ry - by) ** 2)
+        side_y = torch.where(by > 0.5 * (y_lo + y_hi), by - 0.32, by + 0.32)
+        rx = torch.where(d < 0.30 - 1e-3, torch.maximum(bx, x_lo + 0.3), rx)
+        ry = torch.where(d < 0.30 - 1e-3, side_y, ry)
+        # the fallbacks above can push the robot through a wall (a ball against the back wall:
+        # "0.30 m behind it" is behind the wall; 2% of v2's hard starts began outside the room)
+        rx = torch.maximum(torch.minimum(rx, torch.full_like(rx, cfg.goal_line_x - 0.35)), x_lo + 0.3)
+        ry = torch.maximum(torch.minimum(ry, y_hi - 0.3), y_lo + 0.3)
+        d = torch.sqrt((rx - bx) ** 2 + (ry - by) ** 2)
+        # if clamping brought it back onto the ball, slide it along the ball-to-centre line
+        cy = 0.5 * (y_lo + y_hi)
+        ry = torch.where(d < 0.30, torch.where(by > cy, by - 0.32, by + 0.32), ry)
+        self._last_starts = (env_ids, bx, by, rx, ry)           # v2 keeps obstacles clear of these
         # heading: towards the ball, plus noise
         noise = math.radians(lerp(cfg.robot_heading_noise_deg, L))
         yaw = torch.atan2(by - ry, bx - rx) + U(-noise, noise)

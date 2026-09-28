@@ -497,3 +497,66 @@ robot. The 0.10 m/s fine-tune stopped the ball running away (run 7).
   box, the desk edge and the merged blob);
 - logging the detection source and the fit residual on every step;
 - odometry-jump and play-area stops.
+
+---
+
+## 2026-09-28 - v2: the footballer (walls, corners, obstacles)
+
+**Why v2 was needed (seen on the real robot):** a ball that drifted into a
+corner was unrecoverable. In v1 training there were no side walls, so a
+drifting ball just ended the episode, and the policy never met a ball in a
+corner. **A policy can only be good at situations it trained on.**
+
+**What changed:** the room, obstacles and wall starts are in
+SIM_RL_PLAN 2b. The two ideas worth learning:
+- **Give the policy the sensor the task needs.** Avoiding walls needs to
+  *see* walls, so v2 adds a 16-ray depth scan. It is taken at camera height,
+  so it passes over the ball, and it is one row of the real depth image, so
+  it deploys.
+- **Scale difficulty with the curriculum, including the environment.** More
+  obstacles and more wall/corner balls appear as the level rises (your
+  suggestion). At level 0 the rooms are nearly empty so the basics are
+  learned first.
+
+**Checking the checker again:** the scan is computed with formulas (fast),
+and was verified against a slow, obviously-correct method: stepping along
+each ray 2 mm at a time. They agree to 0.2 cm, the step size.
+
+**Engineering gotcha:** Isaac Lab imports a task's *config* module before
+starting the simulator. Put the config class in a file that imports
+physics/USD code and the simulator crashes at startup. Configs go in
+config-only files.
+
+---
+
+## 2026-09-28 - v2 on the real robot, and v2.1
+
+**v2 on the real robot:** runs 9 and 10 scored in 9.2 and 9.8 s (the old
+policy took 15.4 s in the same setup). Run 11 got a ball off the right wall
+and scored in 13.7 s: the v1 policy failed exactly this in run 4.
+
+**The corner beside the box (runs 12a-c): 0/3.** Three different lessons:
+1. **Detection:** the ball was in view but missed for 33 s. YOLO scored it at
+   exactly 0.30 (threshold > 0.30), and the colour fit was perfect but outside
+   the touching zone. A probe that *saves the frame and prints every
+   candidate* showed it in one shot. Fixed: YOLO 0.15 (its box must still
+   pass the sphere fit), and any colour blob that fits as a sphere to 1.5 deg.
+2. **False goals, twice.** The scored check was too loose: a ball outside a
+   side panel counts as "inside" by the mouth's width. It is now tightened
+   to inside-lane and must have entered through the mouth. Then wheel-odometry
+   drift (20-30 cm after 40 s of hard strafing) faked "through the mouth".
+   **When the robot's estimate and your eyes disagree, your eyes win.** The
+   lasting fix is to see the box.
+3. **The robot jams the ball against the side panel** (your observation: it
+   pushes hard, the ball squeezes and can't come out; it should tap and
+   back off).
+
+**v2.1, and a wrong hypothesis caught in time.** I assumed the sim ball was
+too rigid and slippery to jam, so I made it squashier and grippier. A
+scripted test pushed balls into a panel with both: the OLD ball jammed 90%
+of the time, the new one 72%. The physics was never the gap. The missing
+pieces were:
+- the *situation* (balls rarely started beside a side panel);
+- a *reason to stop pushing* (a jam cost nothing but time).
+v2.1 adds side-panel starts and a jam penalty, and keeps v2's ball.
+**Test your fix does what you think before you train on it.**

@@ -30,7 +30,13 @@ HSV_HI = (34, 255, 255)
 CLOSE_PX = 15                  # closes the ball's black stripes
 MIN_AREA_PX = 150
 MAX_CANDIDATES = 3            # fit this many of the biggest blobs; keep the roundest
-YOLO_CONF = 0.30              # real ball: 0.74-0.79 (YOLO11s, pretrained, 2026-09-28)
+# YOLO11s pretrained: 0.74-0.79 on the ball at 0.3-0.5 m, but exactly 0.30 on a small ball
+# (~40 px, 1.3 m) at the foot of a cardboard wall (run 12: 33 s blind). YOLO's box must
+# still hold a yellow blob that passes the sphere fit, so a low threshold is safe.
+YOLO_CONF = 0.15
+# a colour blob ANYWHERE counts if it is really round: every real ball at range fitted at
+# 0.02-1.2 deg on 2026-09-28, every cardboard / wood phantom at 5-27 deg
+ROUND_MAX_DEG = 1.5
 NEAR_X = 0.35                 # [m] touching zone for the colour-only fallback
 MIN_X_BASE = 0.12             # [m] no ball centre closer than this in front of base_link (real touching: ~13.8)
 
@@ -126,11 +132,15 @@ class BallDetector:
             area = int(st[i, cv2.CC_STAT_AREA])
             if area < MIN_AREA_PX:
                 break
-            if st[i, cv2.CC_STAT_TOP] + st[i, cv2.CC_STAT_HEIGHT] < h - 2:
-                continue                                     # not on the bottom edge
             d = self._fit_blob((lab == i).astype(np.uint8), area, h, w)
-            if d.ok and d.x <= NEAR_X:
-                d.source = "near"
+            if not d.ok:
+                continue
+            on_bottom = st[i, cv2.CC_STAT_TOP] + st[i, cv2.CC_STAT_HEIGHT] >= h - 2
+            if on_bottom and d.x <= NEAR_X:
+                d.source = "near"                            # touching zone: YOLO misses cut-off balls
+                return d
+            if d.rms_deg <= ROUND_MAX_DEG:
+                d.source = "round"                           # a really round yellow blob, anywhere
                 return d
         return Detection(False)
 

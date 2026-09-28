@@ -97,3 +97,70 @@ class KayaBallGoalDetEnvCfg(KayaBallGoalEnvCfg):
     # critic: the policy's 15 + true ball position (2) and velocity (2)
     state_space = 19
     debug_vis = True                         # show where the policy believes the ball is
+
+
+# v2 "footballer" (ball_goal_v2_env.py). The config lives here, not with the env:
+# Isaac Lab imports a task's config module BEFORE the simulator starts, and the env
+# module imports USD, which then crashes SimulationApp's startup (seen 2026-09-28).
+@configclass
+class KayaBallGoalV2EnvCfg(KayaBallGoalDetEnvCfg):
+    episode_length_s = 60.0
+    # B2's 15 + the 16-ray depth scan
+    observation_space = 31
+    # + true ball position and velocity for the critic
+    state_space = 35
+    debug_vis = False
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.env_spacing = 8.0
+
+    # safety bounds only: the walls keep everything in
+    arena_x = (-4.0, 3.0)
+    arena_y = (-3.5, 3.5)
+
+    # the room (env frame; the goal wall is fixed at the +x end)
+    room_back_x = (-3.0, -1.5)            # back wall's inner face
+    room_side_y = (1.2, 1.9)              # each side wall's inner face, |y|, drawn independently
+    # obstacle slots, each a cube of its own size (rooms are clones of one USD, so a size cannot
+    # vary per room; random presence mixes them). The chance each is present rises with the
+    # curriculum level: ~1 per room at level 0, ~3 at level 1 (user, 2026-09-28: "more obstacles")
+    obstacle_sizes = (0.15, 0.22, 0.28, 0.35)
+    n_obstacles = 4
+    obstacle_prob = (0.2, 0.7)
+    obstacle_height = 0.30
+
+    # curriculum extras: fraction of starts with the ball against a wall or in a corner, level 0..1
+    wall_ball_frac = (0.0, 0.4)
+    ball_goal_dist = (0.35, 3.0)
+
+    # the depth scan
+    n_rays = 16
+    ray_fov_deg = 92.0
+    ray_max = 3.0
+    ray_noise = 0.02                      # fraction of range
+
+    # extra rewards
+    rew_ball_speed = -0.3                 # per m/s above ball_speed_free
+    ball_speed_free = 0.3
+    # contact, not proximity: recovering a ball from a wall NEEDS the robot close to the wall.
+    # (The first version used an 18 cm radius and 3 cm margin: robots 2-3 cm away counted.)
+    rew_bump = -0.05                      # per step with the robot within bump_dist of a wall/obstacle
+    bump_dist = 0.01
+    # v2.1 knobs (0 = off in v2)
+    rew_jam = 0.0                         # per step pushing a ball that is jammed against something
+    jam_ball_speed = 0.03                 # [m/s] "not moving"
+    side_panel_frac = 0.0                 # of wall starts: ball against the OUTSIDE of a box side panel
+
+
+@configclass
+class KayaBallGoalV21EnvCfg(KayaBallGoalV2EnvCfg):
+    """v2.1: a penalty for pushing a jammed ball, and starts beside the box's side panels
+    (the real runs 12b/12c: the robot freed a corner ball, then kept pushing it into the
+    outside of a side panel). The ball physics is v2's: a scripted push test showed the
+    rigid sim ball ALREADY jams against a panel (stopped 90% of the pushing time; a
+    squashier, grippier ball jammed less, 72%), so the gap was the missing situation and
+    the missing reason to stop pushing, not the physics."""
+
+    rew_jam = -0.2
+    side_panel_frac = 0.3

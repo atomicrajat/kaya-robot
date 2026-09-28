@@ -125,3 +125,4 @@ def scored(ball_pos_env: torch.Tensor, goal_line_x: float, half_width: torch.Ten
     """The whole ball inside the box: behind the mouth by a radius, between the sides."""
     return (ball_pos_env[:, 0] > goal_line_x + BALL_RADIUS) & (ball_pos_env[:, 1].abs() < half_width)
 
+

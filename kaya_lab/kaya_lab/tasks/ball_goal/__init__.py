@@ -4,7 +4,8 @@ import gymnasium as gym
 
 from isaaclab.utils.configclass import configclass
 
-from .ball_goal_env_cfg import KayaBallGoalDetEnvCfg, KayaBallGoalEnvCfg  # noqa: F401
+from .ball_goal_env_cfg import (KayaBallGoalDetEnvCfg, KayaBallGoalEnvCfg, KayaBallGoalV2EnvCfg,  # noqa: F401
+                                KayaBallGoalV21EnvCfg)
 
 
 @configclass
@@ -20,6 +21,12 @@ def register():
         # B2: the camera detector instead of the true ball
         ("Kaya-BallGoal-Det-v0", "KayaBallGoalDetEnvCfg", "KayaBallGoalDetPPORunnerCfg",
          "ball_goal_det_env:KayaBallGoalDetEnv"),
+        # v2: a room with walls, corners and obstacles, and a depth scan ("footballer")
+        ("Kaya-BallGoal-V2-v0", "KayaBallGoalV2EnvCfg", "KayaBallGoalV2PPORunnerCfg",
+         "ball_goal_v2_env:KayaBallGoalV2Env"),
+        # v2.1: a ball that jams when pushed into walls; fine-tuned from v2 (same runner/experiment)
+        ("Kaya-BallGoal-V21-v0", "KayaBallGoalV21EnvCfg", "KayaBallGoalV2PPORunnerCfg",
+         "ball_goal_v2_env:KayaBallGoalV2Env"),
     ]:
         if task_id in gym.registry:
             continue
