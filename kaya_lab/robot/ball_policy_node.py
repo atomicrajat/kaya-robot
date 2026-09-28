@@ -44,6 +44,17 @@ MAX_LIN, MAX_ANG = 0.15, 1.0          # drive node limits; the policy was traine
 AGE_CAP_S = 5.0                       # as in training
 FUSE_JUMP_M = 0.05                    # per 0.1 s step: 0.5 m/s of disagreement = a visual jump
 FUSE_JUMP_RAD = math.radians(8.0)
+# Stall detection (stall_probe measurements, 2026-09-28; the wheels keep spinning at the
+# commanded speed when blocked, so the encoders cannot see a stall):
+#   wall hit          IMU -1.27 m/s^2 spike, loads +10%
+#   ball, open floor  no spike (within +-0.3 noise)
+#   ball pinned       no clear spike, loads +5% -> caught by the depth scan instead
+STALL_IMPACT = 0.6                    # [m/s^2] deceleration against the wheels' direction,
+STALL_ACC_WIN_S = 0.1                 #   averaged over this window
+STALL_LATCH_S = 3.0                   # after an impact: stalled while still pushing the same way, max 3 s
+STALL_WIN_S = 0.5                     # soft stall: wheels moved >= 3 cm forward in this window,
+STALL_WHEEL_M = 0.03                  #   yet the forward depth closed by < 1 cm
+STALL_CLOSE_M = 0.01
 BASE_LINK_Z = 0.037                   # base_link above the floor (wheel radius)
 
 
@@ -103,6 +114,7 @@ class BallPolicyNode(Node):
         # up and moving fits at 1.8-3.1 deg (static frames 0.24-0.86), phantoms (a wooden
         # desk edge) at 12-17 deg. 1.5 deg rejected the real ball while it was being pushed.
         self.max_fit_deg = P("max_fit_deg", 5.0).value
+        self.test_push = P("test_push", 0.0).value               # >0: drive straight at this speed (stall tests)
         # step 1 by YOLO11s on the GPU (TensorRT); "" = colour only
         engine = P("yolo_engine", "").value
         self.yolo = None
@@ -129,9 +141,19 @@ class BallPolicyNode(Node):
         # measures it directly and never jumps. Bias from the first second standing still.
         self.use_gyro = self.odom_source == "fused" and P("gyro_yaw", True).value
         self.R_base_imu, self.gyro_yaw, self.gyro_t, self.gyro_bias, self.gyro_cal = None, 0.0, None, None, []
+        self.acc_cal, self.acc_bias, self.acc_buf = [], np.zeros(2), []
+        self.gyro_rate = 0.0
+        self.stall_until, self.stall_reason, self.stall_dir = 0.0, "", np.array([1.0, 0.0])
+        self.stall_hist = []                      # (t, wheel forward travel so far, forward range, yaw)
+        self.wheel_fwd = 0.0
+        self.n_stalled = 0
         if self.use_gyro:
             self.create_subscription(Imu, "/camera/gyro_accel/sample", self.on_imu, best_effort)
         self.vio_z0, self.vio_dead = None, False
+        # cuVSLAM loses tracking near plain walls and can then report "no motion" while still
+        # alive (the pinned-ball stall test) - and with the IR projector on for depth, its
+        # images carry moving dots. For the ball game: gyro + wheels + stall detection.
+        self.use_vio = P("use_vio", True).value
         # v2 policies also get a 16-ray depth scan (depth_scan.py); needs the depth stream on
         self.use_scan = P("use_scan", False).value
         self.scanner = None
@@ -210,17 +232,68 @@ class BallPolicyNode(Node):
             except tf2_ros.TransformException:
                 return
         w = self.R_base_imu @ np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
+        a = self.R_base_imu @ np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
         t = Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
-        if self.gyro_bias is None:                      # still at the start: learn the bias
+        if self.gyro_bias is None:                      # still at the start: learn the biases
+            self.acc_cal.append(a[:2])
             self.gyro_cal.append(w[2])
             if len(self.gyro_cal) >= 150:
                 self.gyro_bias = float(np.mean(self.gyro_cal))
+                self.acc_bias = np.mean(self.acc_cal, axis=0)
                 self.get_logger().info(f"gyro bias {math.degrees(self.gyro_bias):+.3f} deg/s from {len(self.gyro_cal)} samples")
             self.gyro_t = t
             return
         if self.gyro_t is not None and 0 < t - self.gyro_t < 0.1:
             self.gyro_yaw += (w[2] - self.gyro_bias) * (t - self.gyro_t)
+            self.gyro_rate = w[2] - self.gyro_bias
         self.gyro_t = t
+        # impact: horizontal deceleration against the direction the wheels are driving
+        # average over ~0.1 s, the window the thresholds were measured on (stall_probe). A 3-sample
+        # (~20 ms) window read omni-roller vibration on tile as 1-2 m/s^2 "impacts" and froze the
+        # odometry for 552 of 589 steps of run 19.
+        self.acc_buf.append((t, a[:2] - self.acc_bias))
+        while self.acc_buf and t - self.acc_buf[0][0] > STALL_ACC_WIN_S:
+            self.acc_buf.pop(0)
+        v = self.twist_b[:2]
+        if np.linalg.norm(v) > 0.03:
+            if len(self.acc_buf) < 8:
+                return
+            decel = -float(np.mean([b[1] for b in self.acc_buf], axis=0) @ (v / np.linalg.norm(v)))
+            if decel > STALL_IMPACT:
+                # latched while the robot keeps pushing the same way (the depth is blind against a
+                # plain wall, so nothing else can see that it is still blocked; check 2 of the
+                # stall tests: a 0.7 s hold let the spinning wheels creep 15 cm through the wall)
+                self.stall_until = max(self.stall_until, time.time() + STALL_LATCH_S)
+                self.stall_reason = f"impact {decel:.2f} m/s2"
+                self.stall_dir = v / np.linalg.norm(v)
+
+    def stalled(self):
+        """Stalled until stall_until, unless the command has turned away from the blocked direction."""
+        if time.time() >= self.stall_until:
+            return False
+        cmd = self.action[:2] * MAX_LIN
+        if np.linalg.norm(cmd) < 0.02 or float(cmd @ self.stall_dir) / np.linalg.norm(cmd) < 0.7:
+            self.stall_until = 0.0                       # driving away from the obstacle: free again
+            return False
+        return True
+
+    def check_soft_stall(self):
+        """Soft / pinned stall: the wheels moved the robot forward >= 3 cm in the last 0.5 s
+        while barely turning, but the forward depth readings did not close in."""
+        c = self.last_scan[6:10]
+        rng = float(np.median(c)) if (c < 2.9).sum() >= 2 else None
+        now = time.time()
+        self.stall_hist.append((now, self.wheel_fwd, rng, self.gyro_yaw))
+        while self.stall_hist and now - self.stall_hist[0][0] > STALL_WIN_S + 0.05:
+            self.stall_hist.pop(0)
+        t0, f0, r0, y0 = self.stall_hist[0]
+        if now - t0 < STALL_WIN_S - 0.1 or rng is None or r0 is None or rng > 1.5:
+            return
+        if self.wheel_fwd - f0 >= STALL_WHEEL_M and abs(self.gyro_yaw - y0) < math.radians(5) \
+                and (r0 - rng) < STALL_CLOSE_M:
+            self.stall_until = max(self.stall_until, now + 0.3)
+            self.stall_reason = f"depth: wheels +{(self.wheel_fwd - f0) * 100:.0f} cm, range {(r0 - rng) * 100:+.1f} cm"
+            self.stall_dir = np.array([1.0, 0.0])
 
     def update_fused(self):
         """Fused odometry, once per control step. Wheels drift when the omni rollers slip
@@ -234,6 +307,8 @@ class BallPolicyNode(Node):
         _, pw, yw = self.odom_hist[-1]
         gy = self.gyro_yaw
         try:
+            if not self.use_vio:
+                raise tf2_ros.TransformException("cuVSLAM not used (use_vio:=false)")
             t = self.tf.lookup_transform("odom", "base_link", Time())
             pv, yv = np.array([t.transform.translation.x, t.transform.translation.y]), yaw_of(t.transform.rotation)
             # Kaya lives on the floor: cuVSLAM's height leaving it means tracking is LOST
@@ -263,6 +338,10 @@ class BallPolicyNode(Node):
                 use_v = np.linalg.norm(dv - dw) < FUSE_JUMP_M and abs(dyv - dyw) < FUSE_JUMP_RAD
             d, dy = (dv, dyv) if use_v else (dw, dyw)
             self.n_fuse["vslam" if use_v else "wheel"] += 1
+            self.wheel_fwd += float(dw[0])
+            if self.stalled():
+                d = np.zeros(2)                          # blocked: the wheels spin, the robot does not move
+                self.n_stalled += 1
             if self.use_gyro:
                 dy = gy - self.prev_g                    # turning: always the gyro
                 self.prev_g = gy
@@ -472,6 +551,9 @@ class BallPolicyNode(Node):
 
         to_b = rot(-yaw)
         est_b = to_b @ (self.est_w - p) if self.ever_seen else np.zeros(2)
+        # Own speed: blocked, the real wheels keep spinning at the commanded speed, so the policy
+        # was told "moving forward" while pinning a ball (the user: it keeps pressing). The sim
+        # would say 0 here, so when stalled it gets 0; turning comes from the gyro.
         obs = np.concatenate([
             est_b / 2.0,
             [self.age / AGE_CAP_S],
@@ -479,12 +561,14 @@ class BallPolicyNode(Node):
             (to_b @ (gp_w - p)) / 3.0,
             [math.cos(gdir - yaw), math.sin(gdir - yaw)],
             [self.half_w / 0.23],
-            self.twist_b[:2] / MAX_LIN,
-            [self.twist_b[2] / MAX_ANG],
+            (np.zeros(2) if self.stalled() else self.twist_b[:2]) / MAX_LIN,
+            [(self.gyro_rate if self.use_gyro else self.twist_b[2]) / MAX_ANG],
             self.action,
         ])
         if self.use_scan:                                  # v2: + the 16-ray depth scan, / 3 m as in training
             obs = np.concatenate([obs, self.depth_scan() / 3.0])
+            if self.use_gyro:
+                self.check_soft_stall()
         self.action = np.clip(self.policy(obs), -1.0, 1.0)
 
         # stop conditions
@@ -507,6 +591,9 @@ class BallPolicyNode(Node):
             twist.linear.x = float(self.action[0] * MAX_LIN)
             twist.linear.y = float(self.action[1] * MAX_LIN)
             twist.angular.z = float(self.action[2] * MAX_ANG)
+            if self.test_push > 0:                       # stall test: ignore the policy, push straight on
+                twist.linear.x, twist.linear.y, twist.angular.z = self.test_push, 0.0, 0.0
+                self.action = np.array([self.test_push / MAX_LIN, 0.0, 0.0])
         if not self.dry_run or reason:
             self.cmd.publish(twist)
         if int(t * 10) % 5 == 0 or reason:
@@ -518,11 +605,12 @@ class BallPolicyNode(Node):
                 f" fit {self.last_fit[0]:.2f} deg {self.last_src}"
                 + (f" | scan L->R {np.round(self.last_scan[::3], 2)}" if self.use_scan else "")
                 + (f" | goal {'marker ' + str(self.last_marker_ids) + ' ' + format(time.time() - self.goal_seen_t, '.1f') + 's' if self.goal_w is not None else 'MARK'}"
-                   if self.goal_source == "marker" else ""))
+                   if self.goal_source == "marker" else "")
+                + (f" | STALLED ({self.stall_reason})" if self.stalled() else ""))
         if reason:
             self.done = True
             self.get_logger().warn(f"STOP: {reason} after {t:.1f} s ({self.n_det} detections, {self.n_marker} marker sightings by id {self.marker_counts}, {self.marker_rejected} marker jumps rejected, rejected {self.n_reject}"
-                                   + (f", odometry steps from {self.n_fuse}" if self.odom_source == "fused" else "") + ")")
+                                   + (f", odometry steps from {self.n_fuse}, stalled steps {self.n_stalled}" if self.odom_source == "fused" else "") + ")")
             raise SystemExit
 
     def stop(self):

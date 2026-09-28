@@ -34,6 +34,10 @@ ADDR_GOAL_SPEED = 46
 ADDR_LOCK = 55
 ADDR_PRESENT_POS = 56
 ADDR_PRESENT_SPEED = 58
+# Present Load: 0..1000 = 0..100% of max torque, bit 10 = direction (STS/ST register map).
+# Read for stall detection: a wheel pushing against a wall or scrubbing on the floor
+# draws more than one rolling freely, while its encoder still reports motion.
+ADDR_PRESENT_LOAD = 60
 
 COUNTS_PER_REV = 4096
 MODE_POSITION = 0
@@ -125,6 +129,19 @@ class FeetechBus:
             v, comm, _err = self._read2(sid, ADDR_PRESENT_POS)
             if comm == COMM_SUCCESS:
                 out[sid] = v
+        return out
+
+    def read_loads(self):
+        """Returns {servo_id: signed load, -1.0..1.0 of max torque} for every servo that
+        answered. One try each (no retries): it runs every control tick and is
+        diagnostic, so a dropped reading is skipped rather than slowing the loop."""
+        out = {}
+        for sid in self.servo_ids:
+            self.port.ser.reset_input_buffer()
+            v, comm, _err = self.ph.read2ByteTxRx(self.port, sid, ADDR_PRESENT_LOAD)
+            if comm == COMM_SUCCESS:
+                mag = (v & 0x3FF) / 1000.0
+                out[sid] = -mag if v & 0x400 else mag
         return out
 
     # -------------------------------------------------------------- safety

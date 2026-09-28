@@ -246,6 +246,11 @@ class DriveNode(Node):
         js.position = [self.wheel_accum_counts[sid] * 2.0 * math.pi / COUNTS_PER_REV
                        for sid in self.servo_ids]
         js.velocity = [wheel_mps[sid] / self.wheel_radius for sid in self.servo_ids]
+        # Present load per wheel (-1..1 of max torque) in effort, for stall / contact
+        # detection downstream (the encoders keep counting when a wheel slips).
+        loads = self.bus.read_loads()
+        if len(loads) == len(self.servo_ids):
+            js.effort = [loads[sid] for sid in self.servo_ids]
         self.joint_pub.publish(js)
 
         if self.tf_broadcaster is not None:
