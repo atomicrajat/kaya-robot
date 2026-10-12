@@ -15,6 +15,11 @@ set -u
 # The robot to drive. Defaults to this project's robot; set KAYA_ROBOT for yours,
 # e.g. KAYA_ROBOT=me@192.168.1.50 ./kaya.sh
 ROBOT=${KAYA_ROBOT:-orin-nano@192.168.1.28}
+# Where the repo is checked out ON THE ROBOT (GETTING_STARTED.md step 2).
+RREPO=${KAYA_ROBOT_REPO:-ros2_ws/src/kaya}
+RTOOLS="$RREPO/kaya_bringup/tools"
+# Map to navigate on, and whether to relocalise into it (see kaya_nav.sh).
+NAV_ARGS=${KAYA_NAV_ARGS:-home_final}
 HERE=$(cd "$(dirname "$0")/../.." && pwd)
 DASH="$HERE/dashboard/kaya_dashboard.py"
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=20"
@@ -25,7 +30,7 @@ stop_all() {
   echo "stopping the dashboard"
   p=$(dash_pids); [ -n "$p" ] && echo "$p" | xargs -r kill -9 2>/dev/null
   echo "stopping the robot stack"
-  timeout 90 $SSH "$ROBOT" '~/kaya_run.sh stop' 2>&1 | tail -1
+  timeout 90 $SSH "$ROBOT" "$RTOOLS/kaya_run.sh stop" 2>&1 | tail -1
 }
 
 case "${1:-start}" in
@@ -38,7 +43,7 @@ esac
 
 echo "=== 1/3  robot stack ==="
 timeout 60 $SSH "$ROBOT" 'echo ok' >/dev/null 2>&1 || { echo "cannot reach the robot at $ROBOT -- is it powered and on wifi?"; exit 1; }
-timeout 150 $SSH "$ROBOT" '~/kaya_drive.sh' 2>&1 | tail -2 || exit 1
+timeout 150 $SSH "$ROBOT" "$RTOOLS/kaya_nav.sh $NAV_ARGS" 2>&1 | tail -3 || exit 1
 
 echo "=== 2/3  waiting for the map frame to anchor ==="
 for i in $(seq 1 40); do

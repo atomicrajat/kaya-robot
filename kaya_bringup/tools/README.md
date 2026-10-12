@@ -2,9 +2,10 @@
 
 Small standalone scripts, kept because each one was written to answer a
 question that cost real time, and every one of them will be needed again.
-None depend on anything but rclpy and numpy. Run them with the stack up:
+None depend on anything but rclpy and numpy. Run them on the robot with the
+stack up, from the source tree (they are not installed by colcon):
 
-    python3 tools/<script>.py
+    python3 ~/ros2_ws/src/kaya/kaya_bringup/tools/<script>.py
 
 `scene_quality.py` -- brightness and texture of the IR image, logged against
 pose drift. THE tool for "why is VIO drifting when everything looks healthy".
@@ -56,9 +57,33 @@ unmodelled rotation, zero at rest and proportional to error once moving.
 map. nav2's map_saver_cli refuses it (nvblox publishes volatile, the saver
 expects latched); subscribing with matching QoS is simpler.
 
-`kaya.sh` -- bring the whole robot up from the workstation: robot stack, then
-the dashboard (`./kaya.sh`, `./kaya.sh stop`, `./kaya.sh status`). Put the
-robot on the mark first - relocalisation depends on it.
+`kaya_nav.sh` -- the robot-side bring-up for NAVIGATION, with the configuration
+that worked and the reason for each flag (static 2D map as the global costmap,
+nvblox off, colour off, MAXN_SUPER checked from the clock table). Run on the
+robot: `kaya_nav.sh <map_name> [--relocalise]`. Without `--relocalise` the
+robot must start on the mark the map was made from.
+
+`kaya.sh` -- bring the whole robot up from the workstation: `kaya_nav.sh` on the
+robot over ssh, wait for the map frame to anchor, then the dashboard
+(`./kaya.sh`, `./kaya.sh stop`, `./kaya.sh status`; `KAYA_ROBOT=user@ip`,
+`KAYA_NAV_ARGS="home --relocalise"`). It reads the pose back and says whether
+the robot is ON THE MARK, because anchoring anywhere else offsets every
+remembered place silently.
+
+`cam_rates.py` -- rate, median gap, p90 and worst gap of every camera stream at
+once. THE tool that showed the colour stream starving cuVSLAM's left eye
+(24.5 Hz, p90 67 ms against the right's 28.8 Hz, 35 ms) and the IR exposure
+capping the pair at 20 Hz. Compare the two eyes; an average rate hides both.
+
+`goal_watch.py` -- watches `/goal_pose`, waits for the robot to stop, and prints
+where it actually ended up against the goal, with Z separately. Every goal
+accuracy figure in ROADMAP.md came from this.
+
+`spin_translation_test.py` -- commands one full in-place turn at 0.5 rad/s and
+reports the net translation, the worst excursion during the turn, and the worst
+roll, pitch and z. This robot: 1.7 cm net, 10.9 cm excursion, which is why
+`xy_goal_tolerance` is 0.15 m. Measured in the odom frame, so it is about the
+robot, not localisation.
 
 ## The measurement lesson worth keeping
 
