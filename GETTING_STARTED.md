@@ -63,7 +63,7 @@ no script can do for you.
 On the robot:
 
     mkdir -p ~/ros2_ws/src && cd ~/ros2_ws/src
-    git clone <this repo> kaya
+    git clone https://github.com/atomicrajat/kaya-robot.git kaya
     cd kaya/robot_setup
     ./kaya_provision.sh --dry-run     # see what it will do
     ./kaya_provision.sh               # safe to re-run; skips finished stages
