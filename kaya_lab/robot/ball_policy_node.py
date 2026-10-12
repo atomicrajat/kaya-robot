@@ -37,8 +37,13 @@ from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image, Imu
 
-from ball_detector import BallDetector
-from numpy_policy import NumpyPolicy
+# ball_detector.py is shared with the sim (kaya_lab/kaya_lab/); run this file from the repo
+# checkout on the robot (~/ros2_ws/src/kaya/kaya_lab/robot) and it is found without copying.
+import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "kaya_lab"))
+from ball_detector import BallDetector  # noqa: E402
+from numpy_policy import NumpyPolicy  # noqa: E402
 
 MAX_LIN, MAX_ANG = 0.15, 1.0          # drive node limits; the policy was trained on these
 AGE_CAP_S = 5.0                       # as in training

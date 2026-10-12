@@ -1,6 +1,14 @@
 """Spin in place at 0.5 rad/s for 6 s and compare the yaw change measured by the gyro
 (integrated, bias from 1.5 s standing still), the wheels (/odom) and cuVSLAM (TF).
 Checks the gyro's sign and scale before trusting it for odometry. Ends with zero twist."""
+import os
+import sys
+
+# One-off probes live one level below the node. Make the node's modules (ball_policy_node,
+# depth_scan, goal_marker, yolo_trt) and kaya_lab/ball_detector importable without copying.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [os.path.join(_HERE, os.pardir),
+                os.path.join(_HERE, os.pardir, os.pardir, "kaya_lab")]
 import math
 import time
 

@@ -11,6 +11,14 @@ Logged at 10 Hz:
   vio_vx     forward speed from cuVSLAM (/visual_slam/tracking/odometry)
 Ends with a zero twist.
 """
+import os
+import sys
+
+# One-off probes live one level below the node. Make the node's modules (ball_policy_node,
+# depth_scan, goal_marker, yolo_trt) and kaya_lab/ball_detector importable without copying.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [os.path.join(_HERE, os.pardir),
+                os.path.join(_HERE, os.pardir, os.pardir, "kaya_lab")]
 import math
 import sys
 import time

@@ -1,5 +1,13 @@
 """Detection-only probe: one colour frame -> every YOLO sports-ball candidate down to
 5%, the colour blobs and their sphere fits. Publishes NOTHING (the robot never moves)."""
+import os
+import sys
+
+# One-off probes live one level below the node. Make the node's modules (ball_policy_node,
+# depth_scan, goal_marker, yolo_trt) and kaya_lab/ball_detector importable without copying.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [os.path.join(_HERE, os.pardir),
+                os.path.join(_HERE, os.pardir, os.pardir, "kaya_lab")]
 import cv2, numpy as np, rclpy, time
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy

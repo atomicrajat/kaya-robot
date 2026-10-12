@@ -1,4 +1,12 @@
 """Marker probe: one frame -> the goal box pose from each visible marker. Never moves."""
+import os
+import sys
+
+# One-off probes live one level below the node. Make the node's modules (ball_policy_node,
+# depth_scan, goal_marker, yolo_trt) and kaya_lab/ball_detector importable without copying.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [os.path.join(_HERE, os.pardir),
+                os.path.join(_HERE, os.pardir, os.pardir, "kaya_lab")]
 import time, cv2, numpy as np, rclpy, tf2_ros
 from rclpy.node import Node
 from rclpy.time import Time

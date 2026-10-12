@@ -1,4 +1,12 @@
 """Drive a fixed small move, then stop: python3 nudge.py vx vy w seconds."""
+import os
+import sys
+
+# One-off probes live one level below the node. Make the node's modules (ball_policy_node,
+# depth_scan, goal_marker, yolo_trt) and kaya_lab/ball_detector importable without copying.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [os.path.join(_HERE, os.pardir),
+                os.path.join(_HERE, os.pardir, os.pardir, "kaya_lab")]
 import sys
 import time
 
