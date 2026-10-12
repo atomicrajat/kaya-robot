@@ -1,533 +1,264 @@
-# Kaya: semantic navigation roadmap
+# Kaya: where it stands, the design, and the settings that must not drift
 
-**Goal.** Ask the robot, in words, to go somewhere described by what you *do*
-there — "show me where I can cook", "take me to the washbasin" — and have it
-work out where that is, drive there autonomously, and avoid obstacles on the
-way. Plus a web dashboard with a live map, live robot position, and a place to
-type the question.
+**Goal, as set at the start.** Ask the robot, in words, to go somewhere
+described by what you *do* there ("show me where I can cook", "take me to the
+washbasin") and have it work out where that is, drive there autonomously, and
+avoid obstacles on the way. Plus a web dashboard with a live map, live robot
+position, and a place to type the question. **That goal was reached on
+2026-09-10.** The project then moved on to training the robot in simulation
+(`SIM_RL_PLAN.md`), which produced a second working demo on 2026-09-29.
 
-This document is the plan for getting there, the current milestone, and what to
-test next session.
-
----
-
-## Where we are now
-
-Phases 1-7 are complete and verified on hardware.
-
-| capability | measured |
-|---|---|
-| holonomic drive + wheel odometry | working |
-| visual-inertial odometry (cuVSLAM) | **0.63% drift** over 16.9 m |
-| autonomous navigation (Nav2 + nvblox) | goals reached to 2-12 cm |
-| omni strafing | 0.5 m lateral, -0.1 deg heading change |
-| map of the real space | **202 m^2**, 468k vertices |
-| relocalisation after restart | **5.9 cm** from a 5 m wrong hint |
-| navigate on a reloaded map | 11.6 cm, zero recoveries |
-| dynamic obstacles | people are not fused into the map |
-
-The hard part — reliable localisation and navigation — is done. Everything
-below builds on top of it and does not require touching it.
+This file is the status, the reasoning behind the design, the record of how
+navigation was made to work, what is still open, and the table of settings
+that each cost a day. The step-by-step guide is `GETTING_STARTED.md`; the
+teaching version of all of it is `LEARNINGS.md`.
 
 ---
 
-## What "show me where I can cook" actually requires
+## Where the project stands (2026-10-12)
 
-### The approach: remember scenes, let a reasoning model choose
+| phase | capability | measured |
+|---|---|---|
+| 1 | IMU conditioning (the camera's IMU, not the MPU-6050) | 0.19 deg/min drift after bias removal |
+| 2 | holonomic drive + wheel odometry | forward, strafe and rotate with no cross-talk |
+| 3 | wheel + gyro EKF | superseded by cuVSLAM, which estimates gyro bias itself |
+| 4 | visual-inertial odometry (cuVSLAM, stereo IR) | **0.63% drift** over 16.9 m |
+| 5 | nvblox + Nav2 (omni) | 3.5 m traverses to 6-14 cm; 0.5 m pure strafe, -0.1 deg heading |
+| 6 | save a map, relocalise into it | **5.9 cm** from a 5 m wrong hint (afternoon the map was made) |
+| 7 | dynamic obstacles | a person is seen while present and leaves no trace in the map |
+| 8 | dashboard: live map, robot, planner, camera, click-to-navigate, teleop | runs on the workstation; costs the Jetson nothing |
+| 9 | keyframe memory (pose-tagged images every ~1 m / 45 deg) | 62 places for a 202 m² flat |
+| 10 | **ask in words** | six acceptance questions, six different correct places; drove 5.1 m to the kitchen to 14 cm |
+| 11 | open-vocabulary detection and following (OWLv2 on the workstation) | objects localised in the map to ~1 cm repeatability; follower publishes standoff goals. Prototyped, not polished |
+| RL | drive to a point; ball to goal | 100% in 3 min; **real robot 3 goals in 4** (v2.4) |
+| 12 | memory and events ("when did you last see...") | not started |
 
-The map today is pure geometry — it knows a wall is at (3.2, -1.4), not that it
-is a kitchen. The gap is filled by remembering *what places looked like*, and
-asking a reasoning model which one matches the request.
+---
 
-    while mapping:   keyframe image + its map pose   ->  a few hundred JPEGs
-    on a question:   "where can I cook?" + candidates ->  model picks one
+## The design: what "show me where I can cook" required
+
+**Remember scenes, let a reasoning model choose.** The map is pure geometry:
+it knows a wall is at (3.2, -1.4), not that it is a kitchen. The gap is filled
+by remembering *what places looked like* and asking a model which one matches:
+
+    while driving:   keyframe image + its map pose   ->  a few dozen JPEGs
+    after a drive:   caption each keyframe ONCE       ->  captions.json
+    on a question:   question + captions -> model picks one place
                      -> navigate to that keyframe's pose
 
-This is deliberately chosen over the obvious alternative of running object
-detection and rebuilding meaning from class labels. Both were considered:
+This was chosen over object detection and rebuilding meaning from class
+labels, which was the first plan:
 
 | | object detection | keyframes + reasoning model |
 |---|---|---|
 | Jetson cost | YOLO at 1-2 Hz, competes for GPU | saving JPEGs, nearly free |
 | vocabulary | COCO's 80 fixed classes | anything describable |
 | "somewhere to read" | impossible | works |
-| "where can I cook" | infer from oven + fridge | sees a kitchen |
 | new code on robot | detect -> depth -> TF -> cluster | an image writer |
 
-COCO cannot represent "a cosy corner to read in" or "somewhere to put this
-down". A model that looks at the scene can. The heavy lifting also moves off
-the robot, which is what makes it affordable at all.
+**Caption once, query many.** Sending every keyframe image to the model per
+question would have cost over a minute per question, growing with every
+drive. Captioning all 62 keyframes once took 1m58s; a question is then text
+against text, about a second, flat in the size of the store. It also makes
+the memory inspectable: when the robot says the kitchen is at (-2.06, 4.74),
+you can read what it saw there.
 
-### Where the reasoning model runs
+**Captions are structured: `here` versus `beyond`.** The first captions sent
+the robot to a corridor mouth from which a fridge was visible 2.7 m away. A
+fridge in `beyond` is a signpost; a sink in `here` is the kitchen. That split,
+and nothing domain-specific, fixed it: a rule like "cooking means a sink" was
+tried and made things worse (it answered "washbasin" with a bedroom).
 
-**Not on the Jetson.** NVIDIA Cosmos 3 — the natural fit conceptually, being a
-reasoning VLM built for physical AI — ships as Nano at 16B parameters
-(positioned for workstation inference) and Super at 64B (datacenter). At 16B
-even INT4 quantisation is roughly 8 GB, which is the entire board, and the
-navigation stack already holds 3.7 GB. This is not a close call.
+**Where the model runs: the workstation, by latency, not preference.** The
+Orin has ~3.9 GB free with the navigation stack up, and a 7B vision model
+would compete with cuVSLAM and nvblox for the same 8 GB. Captioning and
+answering are one-shot with a human waiting, where a second is not felt;
+tracking and following are a control loop, where latency *is* error, and
+those stay on the robot. `KAYA_VLM` and `OLLAMA_HOST` move the model without
+a code change. The model used is qwen2.5vl:7b under Ollama.
 
-Options, in order of practicality:
-
-1. **Cloud vision model (recommended to start).** Send the question and a
-   shortlist of keyframes, get back a choice. No Jetson cost, no deployment,
-   easy to iterate. Needs wifi at query time, which the robot has.
-2. **Cosmos 3 Nano on a workstation.** If a machine with enough VRAM is
-   available, this is the closest thing to what was envisioned, and keeps
-   everything on the local network.
-3. **A small VLM on the Jetson (2-3B, quantised).** Only worth it if the robot
-   must answer with no network at all. Expect it to be slow and to compete with
-   navigation for memory.
-
-The robot side is identical in all three — it stores keyframes and executes a
-goal. Swapping the model is a configuration change, not a rebuild.
-
-### Keeping the candidate set small
-
-A few hundred keyframes is too many to send to any model per question. Narrow
-first, cheaply:
-
-- **Spatial thinning.** Keep one keyframe per ~1 m of travel and per ~45 deg of
-  heading change. A 200 m^2 space needs a few hundred, not thousands.
-- **Embedding pre-filter.** A small local image-text model (CLIP-class, well
-  within the Jetson's budget) scores every keyframe against the question and
-  passes only the top handful to the reasoning model. This is the piece that
-  makes the whole thing scale, and it can run in the background as the
-  user suggested — it does not need to be fast.
-
-### Memory and events
-
-Keyframes are timestamped and pose-tagged, so the same store answers "when did
-you last see..." and "has anything changed in the kitchen". Worth a separate
-events table for things worth remembering rather than every frame.
-
-### Object detection: still useful later
-
-Not abandoned, just not first. `isaac_ros_yolov8` is already installed, and
-object positions in map coordinates are the right tool for precise targets —
-"go to the fridge" rather than "go to the kitchen". It layers on top of the
-keyframe store rather than replacing it.
-
-### Web dashboard
-
-Two stages:
-
-- **Now, nearly free:** `foxglove_bridge` is already installed. Foxglove Studio
-  runs on the Mac, shows the live map and robot position, and its 3D panel can
-  publish a goal where you click. Measured cost when idle: none.
-- **Later:** a small custom web app for the chat interface — a text box that
-  hits the reasoning layer, plus the map view. Foxglove cannot host the
-  question-asking part.
+**Answering and driving stay separate.** The dashboard shows the remembered
+photo, the pose and the model's reason, and a separate button to go. A model
+that is confidently wrong should cost a glance at a picture, not a drive
+across the flat. It is also allowed to say no: asked for a swimming pool it
+refused rather than picking the nearest room.
 
 ## Running this on an Orin Nano 8 GB
 
-The user's instinct is right and worth stating as a design principle: **the
-semantic layer does not need to be fast.** Navigation is real-time and must
-stay so; understanding the room can lag by seconds or run in the background.
+**The semantic layer does not need to be fast.** Navigation is real-time and
+must stay so; understanding the room can lag by seconds. Measured headroom
+with the full navigation stack running: 3.7 GB of 7.5 GB used, nvblox 1.2 GB,
+cuVSLAM 7-9 ms per frame.
 
-Measured headroom with the full nav stack running:
+Rules that followed, each one backed by a failure:
 
-    memory used     3.7 GB of 7.5 GB      (~3.8 GB free)
-    nvblox RSS      1.2 GB
-    cuVSLAM track   7-9 ms per frame
-
-Design rules that follow:
-
-1. **Run detection at 1-2 Hz, not 30.** A room does not change fast. This is
-   the single biggest saving and costs nothing in usefulness.
-2. **Detect only while moving slowly, or when the view has changed.** No point
-   re-detecting the same wall a hundred times.
-3. **YOLOv8n (nano), TensorRT, INT8 or FP16.** Roughly 0.5-1 GB. Fits.
-4. **Never let it starve cuVSLAM.** This project has already been bitten twice
-   by exactly that class of problem — the point cloud starving the pipeline,
-   and dynamic-mode decay deleting the map. Measure `track_execution_time_mean`
-   and raw VIO drift on a driven loop before and after, not just `vo_state`.
-5. **Language and reasoning happen off-board.** No LLM on the Jetson to start.
+1. **Detect at 1-2 Hz, not 30.** A room does not change fast.
+2. **Throttle at the source for off-board consumers.** A workstation
+   subscriber on the full-rate depth topic pulled ~20 MB/s over wifi, starved
+   `collision_monitor` of its only source, and stopped the robot while the
+   follower tracked its target perfectly. `perception_throttle` republishes
+   colour, depth and IR at 2 Hz on `/kaya/perception/*`.
+3. **Never let anything starve cuVSLAM.** The full-resolution point cloud,
+   the colour stream, the depth-to-colour aligner and the IR auto-exposure
+   each did, and each showed up as navigation error rather than as a CPU
+   number.
+4. **Verify against raw VIO drift on a driven loop, not `vo_state`.** Every
+   health counter reported perfect health while the estimator drifted 15-32%.
+5. **Language and reasoning off-board.**
 
 ---
 
-## Phased plan
-
-Each phase is independently useful and independently testable.
-
-### Phase 8 — Dashboard and click-to-navigate (small)
-Bring up `foxglove_bridge`, connect Foxglove on the Mac, confirm live map and
-robot position, publish a goal by clicking. Measure the cost to VIO of a
-connected client streaming mesh and pointcloud topics — untested so far.
-
-**Done when:** you can click a point on the map and the robot drives there.
-
-### Phase 9 — Keyframe memory (the core new work, and it is small)
-While driving, save a colour keyframe plus its map pose whenever the robot has
-moved ~1 m or turned ~45 deg. Store as JPEG plus a JSON index. Nothing else on
-the robot changes.
-
-**Done when:** a mapping run leaves a few hundred pose-tagged images on disk,
-and they survive a restart.
-
-**Watch for:** almost nothing. Writing JPEGs is cheap. Still re-check raw VIO
-drift on a driven loop, because this project has twice been surprised by a
-change that looked free.
-
-### Phase 10 — Ask in words  — WORKING 2026-09-10
-
-`perception/scene_memory.py`, wired to the dashboard's Ask box. Not a cloud
-model in the end: qwen2.5vl:7b under ollama on the workstation's 24 GB card.
-
-The build that matters is **caption once, query many**. Captioning all 62
-places took 1m58s and happens after a drive; a question after that is text
-against text, about a second, and flat in the size of the store. Sending the
-images per-question would have been over a minute per question, forever.
-
-Verified on the acceptance questions below, all six right — including refusing
-to invent a swimming pool. Answering and driving are separate: the dashboard
-shows the remembered photo and the pose, and you press Go.
-
-**Proven end to end 2026-09-10.** Robot on the mark, fresh frame, anchor read
-(-0.004, -0.002) yaw +0.1 against the store's origin of (-0.008, 0.002) -- a
-5 mm agreement, so the stored poses were valid. Asked "where can I eat", it
-picked the kitchen keyframe at (-0.61, +4.73), drove 4.8 m, and Nav2 reported
-Reached the goal!
-
-Final error 22.6 cm, which is a REGRESSION against the 6.3 cm measured in
-Phase 8, and the shape of it says where it came from. The robot arrived clean:
-one sample reads exactly 0.00 m at (-0.61, +4.73). It then drifted 22 cm during
-the final rotate-to-goal-heading, with this immediately before the verdict:
-
-    Rotation Shim Controller ... TF failed to transform into base frame!
-    Reached the goal!
-
-Pure in-place rotation was measured at 1.7 cm net over 360 deg, so an 87 deg
-turn cannot physically produce 22 cm. This is the pose estimate moving, not the
-robot -- the ~400 ms camera stall under load, landing on the last action of the
-run. Final yaw was also 16 deg off a 14.3 deg tolerance, consistent with the
-same lag.
-
-It also wandered for the first ~66 s before setting off, oscillating around
-(0.3-0.9, 0.6-1.0) without approaching the goal, then drove a clean straight
-line from (-0.11, 1.38) to (-0.38, 3.08). Both behaviours are navigation's, not
-this phase's.
-
-Original plan: question -> shortlist keyframes -> reasoning model picks one ->
-send its pose as a Nav2 goal. A CLIP-class local pre-filter to keep the
-shortlist small once there are many keyframes is still the right move at
-several hundred places; at 62 it is not needed.
-
-**Done when:** "show me where I can cook" drives the robot to the kitchen, and
-"take me to the washbasin" drives it to the sink.
-
-**Note:** this is the phase that proves the whole idea, and it needs no new
-robot capability — only the keyframes from Phase 9 and the navigation that
-already works.
-
-### The camera stall is now the largest source of navigation error
-
-Not a background curiosity any more. Measured across two runs on 2026-09-10,
-both driving to a pose chosen by Phase 10:
-
-    run 1 (no static map)   0.00 m in flight  ->  22.6 cm settled
-    run 2 (static map)      0.03 m in flight  ->  33.0 cm settled
-
-Both ARRIVED clean and then the pose shifted during the final
-rotate-to-goal-heading. Run 2 logged 1149 'Delta between current and previous
-frame is above threshold' warnings in about four minutes. In-place rotation was
-measured at 1.7 cm net over 360 deg, so a 33 cm shift from a small final turn
-is not something this base can do -- the estimate is moving, not the robot.
-
-The same stall broke tracking outright at the end of the session before it:
-cuVSLAM lost visual tracking on a PARKED robot, dead reckoning ran the pose to
-(+63, -41, z -61), and pose_guard correctly cancelled on z = -3.98 m and roll
-+66.7 deg. The guard works; the input to it does not.
-
-Still unexplained: jetson_clocks made no difference, and MAXN_SUPER has never
-been successfully enabled (`nvpmodel -m 2` errors with 'bad input').
-
-Worth separating before chasing it: whether the settled pose is wrong or the
-robot physically overshoots. Those need different fixes and the logs cannot
-tell them apart -- it needs someone looking at the robot.
-
-### Static map or not is a real choice, and it was made by accident once
-
-`nav.launch.py` defaults to `nav2.yaml` (nvblox_layer, no static map). The
-smooth runs all used `nav2_static_map.yaml` with `map_2d` and `nvblox_map`
-loaded. Launching with defaults gives the planner nothing at t=0, and it
-wandered for 66 s near the origin before finding a path. Not a regression in
-the planner -- a different launch.
-
-    kaya_run.sh start \
-      nav2_params:=.../config/nav2_static_map.yaml \
-      map_2d:=/home/orin-nano/kaya_maps/home_final/home_2d.yaml \
-      nvblox_map:=/home/orin-nano/kaya_maps/home_final/home.nvblx \
-      enable_color:=true color_fps:=5
-
-The 62 keyframe poses were checked against `home_final` before trusting the two
-frames together: 100% land in free space as recorded, against 59-85% for every
-1-2 m shift, so the session frame and the saved map genuinely coincide.
-
-### Phase 11 — Objects: find, track, and follow
-
-Two related capabilities, sharing a detection stack:
-
-- **Precise targets.** "Go to the fridge" rather than "go to the kitchen":
-  detections projected through depth and TF into map coordinates, stored
-  alongside the keyframes.
-- **Follow that.** "Track the red backpack and follow it" — acquire a target
-  named in words, keep it in view, and move with it while avoiding obstacles.
-
-**Two models, used for different jobs.** They are not alternatives:
-
-| | `isaac_ros_yolov8` | NanoOWL |
-|---|---|---|
-| status | already installed | needs installing |
-| vocabulary | 80 fixed COCO classes | **anything, described in words** |
-| speed | fast, real-time capable | ViT-based, expensive |
-| use | person following, common objects | acquiring arbitrary targets |
-
-YOLOv8 already knows `person`, so person-following needs nothing new. NanoOWL
-earns its place for "follow my cat", "track the blue box" — targets that were
-never a training class.
-
-**The pattern that makes this affordable.** NanoOWL is reported at ~95 FPS on
-AGX Orin, which is roughly 4-7x more capable than this Orin Nano 8 GB — expect
-single-digit to low-teens FPS here standalone, and less sharing the GPU with
-cuVSLAM and nvblox. That is fine, because open-vocabulary detection is only
-needed to ACQUIRE a target, not to follow one:
-
-    "follow the red backpack"
-      -> NanoOWL runs once            (slow, open-vocabulary) -> target box
-      -> lightweight tracker follows  (10-15 Hz, no ViT in the loop)
-      -> NanoOWL re-acquires only when the track is lost
-
-A correlation or IoU-association tracker costs almost nothing next to a ViT.
-Running NanoOWL every frame would be the obvious implementation and the wrong
-one.
-
-**Turning a tracked box into motion.**
-
-    bounding box -> depth at the box -> 3D point (camera frame)
-                 -> TF -> target position in the MAP frame
-                 -> goal at a standoff distance (~1 m) on the robot's side
-                 -> republish at ~2 Hz as the target moves
-
-Nav2 then does the driving and the obstacle avoidance, which it already does
-well — nothing new is needed there. Following is a goal-republishing problem,
-not a new controller.
-
-**Behaviour worth getting right, learned the hard way elsewhere in this
-project:**
-
-- **Standoff, not pursuit.** Target a point ~1 m short of the subject. Driving
-  at the actual detection means arriving at a person's feet.
-- **Lost target must stop, not guess.** If the track is lost, stop and try to
-  re-acquire. Never extrapolate a person's motion into a goal.
-- **Cap the speed below the drive limits already set** (0.15 m/s), so following
-  never becomes the fastest thing the robot does.
-- **The camera faces forward only.** A target that moves laterally out of a
-  ~90 deg FOV is simply gone. The robot must turn to keep it, which is a real
-  behaviour to write, not a detail.
-
-**Watch for:** this is the first phase that genuinely competes with cuVSLAM for
-GPU. Memory today is 3.7 GB used of 7.5 GB with the nav stack running, so there
-is room, but verify raw VIO drift on a driven loop stays under ~1% with
-detection running. `vo_state` and frame times will look fine either way — that
-is exactly how the `time_domain` regression hid for a day.
-
-### Phase 12 — Memory and events
-Event table, decay of stale objects, time-aware queries. "When did you last
-see..." and noticing that something has moved.
-
-### Later / optional
-- Human detection and following (COCO already has `person`)
-- Semantic segmentation via `isaac_ros_unet` (not installed, more GPU) if
-  object boxes prove too coarse
-- Autonomous exploration so it can map a new space unattended (nothing
-  installed; needs a frontier explorer on the ESDF)
-- Mesh cleanup for a presentable 3D model — cosmetic, not needed for navigation
-
----
-
-## Next session: test after charging
-
-In order. Stop at the first failure rather than pressing on.
-
-1. **Health check after the unclean shutdown**
-   - `sudo dmesg | grep -i nvgpu` — expect 0 ACR errors. If the GPU failed to
-     initialise, reboot; CUDA will report 0 devices while the camera looks fine.
-   - Confirm both repos still at the same commit.
-
-2. **Re-verify the map still loads** (it was saved and tested once)
-
-       tools/kaya_run.sh start \
-         map_path:=/home/orin-nano/kaya_maps/home_final/cuvslam \
-         hint_x:=3.0 hint_y:=-4.0
-
-   Expect relocalisation to within ~10 cm despite the deliberately wrong hint.
-   It failed this way on the night of 2026-09-08 while hints up to 3.5 m still
-   worked — see "the relocalisation recovery radius is not fixed" below. Run it
-   in the afternoon first, since that is the open question.
-
-3. **Navigate to two or three different points** on the saved map, including
-   one in another room. Everything so far has been short hops in open space;
-   a goal that requires actually crossing the map is untested.
-
-4. **Drive a longer loop and re-check drift** — confirm 0.63% was not a lucky
-   run. Read `odom -> base_footprint`, not the corrected pose.
-
-5. **Then start Phase 8** (Foxglove), which needs no driving and little battery.
-
-### The relocalisation recovery radius is not fixed — and why is unresolved
-
-Measured 2026-09-08, robot on its marked spot, which IS the saved map's origin
-(so a hint of 3,-4 is exactly 5 m wrong), against `home_final` built the same
-afternoon at 15:24:
-
-| hint error | afternoon | that night, 21:00 |
-|---|---|---|
-| 0 m | — | localizes, 1-2 cm |
-| 2.0 m | — | localizes, 2.3 cm |
-| 3.5 m | — | localizes, 1.5 cm |
-| 5.0 m | **5.9 cm** | **fails, reproducibly** |
-
-So relocalisation still works, and works well; what shrank is how far a wrong
-hint can be and still recover. Nothing in the stack changed between those runs
-— both repos at the same commit, GPU healthy, IR pair at 28.9 Hz, `vo_state` 1,
-`track_execution_time_mean` 7.1 ms, map file intact.
-
-**The cause is not established, and the obvious suspect does not survive
-contact with what this project already measured.** The tempting story is
-"daylight map, night scene" — but indoor IR texture here was measured at 4.39 in
-daylight and 4.4 at night, *identical*, and "VIO needs daylight" and
-"`enable_laser` is needed at night" were both tested to destruction and found to
-be artefacts of the `time_domain` timestamp bug. Texture that night measured
-4.33, which is simply this room's normal number, not evidence of darkness.
-
-What is genuinely different from the mapping run is the scene's contents rather
-than its lighting: a person was sitting at the desk, occupying part of the view,
-and furniture may have moved. That is a hypothesis, not a finding.
-
-**How to resolve it, in this order:**
-
-1. Re-run the 5 m hint in the afternoon, same spot. If it recovers, time of day
-   matters and the next question is what about it. If it still fails, the map or
-   the scene changed and lighting was never involved.
-2. Only then vary one thing at a time — room empty vs occupied, lamp on vs off.
-
-Do not record "relocalisation needs daylight" as a finding until step 1 says so.
-This project has already written that sentence once and had to retract it.
-
-### Navigation on a saved map: what works now, and what is still wrong
-
-A 3.5 m traverse across the room now completes. Three consecutive goals reached
-with zero tracking losses, final heading within 1 deg of the request, the robot
-arriving and stopping rather than hunting. Short hops still land to 5.5-6.2 cm;
-long traverses land to 17-20 cm.
-
-Getting there removed five real faults, each found by measurement:
+## How navigation got here
+
+### The 3.5 m traverse, fault by fault
+
+Every step below is a measurement on the same goal from the same start.
+
+    .nvblx reloaded, the original config      stalled 1.00 m short
+    nvblox lethal band 0.35 -> 0.22 m         0.62 m
+    dynamic mapper finally gets the slice     0.43 m
+    BT server timeout 20 -> 2000 ms           0.31 m
+    nvblox out of the global costmap          full distance, overshoots
+    VoxelLayer instead of the ESDF layer      first "Reached the goal!"
+    wz_max 1.0 -> 0.5, tolerances from the    three goals reached, stable,
+    measured rotational excursion             heading within 1 deg
 
 | fault | what it did | fix |
 |---|---|---|
 | nvblox layer in the GLOBAL costmap | an ESDF cannot say "I have not looked there", so everything outside the camera cone read as lethal and the planner could only plan inside the FOV | static map globally; nvblox is not a costmap source |
 | nvblox ESDF as the local obstacle layer | same blindness, locally | `VoxelLayer` on `/camera/depth/points`: mark, clear, leave unknown alone |
-| slice settings under `static_mapper` only | navigation uses the DYNAMIC mapper, whose slice started at 0.0 -- the floor plane -- so polished tile reflections fused as obstacles | give `dynamic_mapper` the same slice |
+| slice settings under `static_mapper` only | navigation uses the DYNAMIC mapper, whose slice started at 0.0, the floor plane, so polished tile reflections fused as obstacles | give `dynamic_mapper` the same slice |
 | `wz_max: 1.0` | the controller satisfied heading by driving arcs; once it rotated fast enough to lose visual tracking and dead-reckoned the pose out past 13 km | 0.5 rad/s |
 | `xy_goal_tolerance: 0.10` | tighter than the robot's own 10.9 cm rotational excursion, so heading corrections always broke the position check | 0.15 m, set from that measurement |
 
-**The base was never at fault.** Commanded a pure in-place turn -- wz only,
-vx = vy = 0 -- it closes a full 360 deg with 1.7 cm of net translation.
+**The base was never at fault.** Commanded a pure in-place turn, this robot
+closes 360 deg with 1.7 cm of net translation (`tools/spin_translation_test.py`).
 
-Two things are known broken and are NOT worked around:
+### Five Nav2 defaults that stopped the robot from ever moving (Phase 5)
 
-- **`default_server_timeout` is not the lever for the first-goal timeout.**
-  Tried at 500 ms and 2000 ms; `bt_navigator` still times out acknowledging the
-  first `follow_path` of a session, and only the first. The BT XML's action
-  nodes likely carry their own `server_timeout` port rather than inheriting the
-  blackboard value. Impact is bounded -- the first goal of each session runs
-  unsupervised, with no replanning or recovery.
-- **`map_server` loses a lifecycle race** on this board often enough to matter.
-  `map_server_guard` nudges it to active; the underlying race is unfixed.
+All inherited from `nav2_bringup`'s TurtleBot template, all silent: a global
+costmap with its corner at the origin (the robot started outside it); a
+velocity smoother with `y = 0.0` that deleted every strafe command after the
+`Omni` motion model had produced it; a collision monitor watching a LiDAR
+topic nothing published; no `transform_tolerance` against a camera-stamped
+TF; and a progress checker demanding 0.5 m of motion for a 0.5 m goal.
 
-### The colour stream was starving cuVSLAM's left eye
+### The false "Reached the goal!"
 
-Measured on the robot, camera stream rates with the full nav stack running:
+Nav2's `ControllerServer::isGoalReached()` ignores the return value of
+`transformPose`. When the transform is too old the output pose stays
+default-constructed at (0, 0, 0), so the goal checker compares the robot
+against the **origin**, and a robot that has just left its mark is near the
+origin. It stopped 23 cm into a 5 m drive and reported success,
+reproducibly, to the centimetre. The fix is `transform_tolerance` above the
+measured TF lag (1.5 s against 0.47 s), so Nav2 uses the latest transform
+instead of discarding the goal.
 
-| stream | colour ON | colour OFF |
+### The camera was never stalling
+
+A session was spent chasing a "camera stall under load" through memory,
+nvblox and colour. The IR frames were 51 ms apart because the Orbbec driver
+ships `enable_ir_long_exposure` true with no exposure cap, and a sensor
+cannot expose for longer than its frame period. Capping exposure at 20 ms took
+the left IR from 18.0 to 28.4 Hz. The launch file silently drops that
+parameter, so `camera_tuner_node` sets it after start-up and reads it back.
+MAXN_SUPER (`nvpmodel -m 2`) took cuVSLAM from 15.3 to 28.4 Hz and stopped its
+input queue turning a 0.47 s lag into 4 s spikes.
+
+### The colour stream and the stereo pair
+
+Every colour frame is bandwidth taken from the IR pair cuVSLAM tracks on, and
+the cost is linear. Same 3.5 m goal, same start, only `color_fps` changed:
+
+| colour | traverse accuracy |
+|---|---|
+| off | **6.3 cm** |
+| 5 fps | 10.5 cm |
+| 15 fps | 14.7 cm |
+| 30 fps | ~20 cm |
+
+Navigation runs with colour **off**; the dashboard shows the IR stream, which
+is already running for cuVSLAM and costs nothing. The ball demo runs colour at
+15 fps because the detector needs it and that stack has no nvblox or Nav2.
+
+---
+
+## What is still open
+
+### The relocalisation recovery radius is not fixed, and why is unresolved
+
+Measured 2026-09-08, robot on its mark, which IS the saved map's origin:
+
+| hint error | afternoon (map just built) | that night |
 |---|---|---|
-| left IR | 24.5 Hz, p90 **66.6 ms** | **28.0 Hz, p90 35.5 ms** |
-| right IR | 28.8 Hz, p90 35.0 ms | 29.1 Hz, p90 34.9 ms |
-| depth points | 29.2 Hz, p90 36.4 ms | 29.6 Hz, p90 34.0 ms |
+| 0 m | - | localises, 1-2 cm |
+| 2.0 m | - | localises, 2.3 cm |
+| 3.5 m | - | localises, 1.5 cm |
+| 5.0 m | **5.9 cm** | **fails, reproducibly** |
 
-The two eyes were not equal. The left ran 15% slower with 10% of its frames
-arriving at half rate, and cuVSLAM needs matched PAIRS, so the slow eye set the
-true tracking rate. `stereo_sync.py` reported 0% unmatched throughout, which is
-consistent and not a contradiction: every surviving left frame does have a
-right. The drops are on the left camera, not in the pairing, and only a rate
-comparison shows it.
+Nothing in the stack changed between the runs. **Lighting is not the cause**:
+indoor IR texture measured 4.39 by day and 4.4 at night, and both "VIO needs
+daylight" and "the projector is needed at night" were tested to destruction
+and found to be artefacts of the `time_domain` bug. What differed was the
+scene's contents (a person at the desk; furniture moved later). By 2026-09-10
+relocalisation failed three times from the mark itself, after the round tables
+had moved, and the project switched to anchoring a fresh frame at the mark.
+To resolve: re-run the 5 m hint on a fresh map, then vary one thing at a
+time (room empty vs occupied, lamp on vs off). Do not write "needs daylight"
+until that says so; this project wrote it once and retracted it.
 
-Turning colour off with `enable_color:=false` balances the pair, and the
-3.5 m traverse went from ~20 cm to **6.3 cm**, matching the short-hop accuracy
-for the first time, with zero tracking losses and zero pose-guard trips.
+### The IR pair arrives 0.47 s late whenever depth is on
 
-Colour is not free at any rate, and the cost is linear. Same 3.5 m goal, same
-start, only `color_fps` changed:
+| configuration | IR stamp lag |
+|---|---|
+| depth pipeline OFF | 0.019 s |
+| depth pipeline ON | **0.459 s** |
+| `time_domain` system | 0.420 s |
+| `enable_sync_host_time` | 0.463 s |
+| `depth_registration` false | 0.468 s |
+| `enable_frame_sync` false | 0.470 s |
+| `enable_point_cloud` false | 0.425 s |
+| wheel TF, same board | 0.006 s |
 
-| colour | traverse accuracy | colour usable |
-|---|---|---|
-| off | **6.3 cm** | no |
-| **5 fps** | **10.5 cm** | yes |
-| 15 fps | 14.7 cm | yes |
-| 30 fps | ~20 cm | yes |
+The depth engine is on-device and the IR frames come out behind it. No
+software knob moves it, so the stack is configured for the latency that
+exists (`transform_tolerance` 1.5 s). The proper fix would be in the camera.
 
-Every colour frame is bandwidth taken from cuVSLAM's stereo pair, so there is
-no setting that is free -- only a choice. 5 fps is the default because it is
-the cheapest colour that still feeds everything that needs it: the dashboard
-polls about 6 Hz, the roadmap's own rule for detection is 1-2 Hz, and a
-reasoning model wants single frames on demand. `enable_color:=false` buys the
-last 4 cm for a mapping run or a docking manoeuvre.
+### Also open
 
-Two things this did NOT fix, so they are still open:
+- **The moved-furniture test has never been run** as a controlled test. It is
+  the requirement that motivated the costmap rebuild.
+- **`bt_navigator` times out acknowledging the first `follow_path` of each
+  session**, and only the first: first-contact discovery, not load.
+  `default_server_timeout` 2000 ms covers it; the cause is upstream.
+- **`map_server` loses its lifecycle race** on this board often enough to
+  matter; `map_server_guard` nudges it active. The race is unfixed.
+- **Long traverses end less accurately than short hops** (14-20 cm against
+  6 cm) and most of the loss is on the final rotate-to-heading, where the
+  0.47 s pose lag lands on the last action.
+- **Phase 11 following** was proven on the live stream (OWLv2 localises a
+  bed and a chair in the map to ~1 cm across frames; the follower publishes
+  goals 1 m short of the target) but was not made into a demo. Two lessons
+  are recorded in `perception/`: prompts match appearance, not identity ("a
+  blue board" found the book that "a book" did not), and a 0.12 confidence
+  threshold accepts curtains (0.25 does not).
+- **Phase 12** (events, "when did you last see...") is not started.
+- **Autonomous exploration** and **mesh cleanup** remain optional.
 
-- **~400 ms stalls.** Under load every camera stream freezes together for up to
-  400 ms. At 0.5 rad/s that is 11.5 deg of rotation with no vision, dead
-  reckoned on the IMU, and it is what produces the z excursion during turns
-  (0.14-0.22 m loaded against 0.013-0.026 m unloaded, which reproduces).
-  `jetson_clocks` did not help, so it is not frequency scaling.
-- **`nvpmodel -m 2`** (MAXN_SUPER) is available and the board is running on
-  25W. The call errored with "bad input" and was not retried.
+## Practical notes
 
-### What is left, in the order that matters
-
-1. **VIO stability is now the limiting factor, not planning.** On one traverse
-   the pose jumped 1.2 m in 4 s -- impossible at 0.15 m/s, no relocalisation
-   and no loop closure in the log, and immediately preceded by
-   `Delta between current and previous frame [133 ms]`, the camera dropping to
-   ~7 Hz. Glitches that size move the goal relative to the robot mid-run and
-   explain the wandering that survives every costmap and controller fix.
-   Measure the camera pipeline under load first; `/camera/depth/points` now has
-   TWO consumers, `VoxelLayer` and `collision_monitor`, and this project has
-   already been bitten once by the point cloud starving the camera.
-
-2. **A runtime pose sanity guard.** `origin_anchor_node` validates the pose at
-   localisation and refuses a bad one. Nothing watches it afterwards, so when
-   VIO diverged the robot kept driving on a pose that was fiction. The same
-   flat-floor check -- |z| and tilt -- applied continuously would have caught
-   it within a second and stopped the robot. This is the difference between a
-   failed run and a robot moving in the real world on invented coordinates.
-
-3. **Accuracy: 17-20 cm on a traverse against 5.5-6.2 cm on a short hop.** That
-   gap is drift accumulated over distance. Worth characterising against driven
-   length before tightening any tolerance.
-
-4. **The moved-furniture test has still never been run.** It is the requirement
-   that motivated the whole costmap rebuild and it remains unverified.
-
-### Practical notes
-
-- **Charge fully.** Runtime tracks charge in: 2h30m, 1h50m, and under an hour
+- **Charge fully.** Runtime tracks charge in: 2h30m, 1h50m, under an hour
   after a quick top-up. Budget under two hours with the full stack.
-- **Commit as you verify.** A battery death has already stranded verified work
-  once.
-- **Keep people out of the way during a mapping run** — mapping mode uses
+- **Commit as you verify.** A battery death has already stranded verified
+  work once.
+- **Keep people out of the way during a mapping run.** Mapping mode uses
   `static_tsdf` with decay off, so anything moving is fused in permanently.
-  That is the deliberate trade; navigation mode still handles people correctly.
+- **Restart the stack after carrying the robot.** VIO does not survive being
+  picked up: a spin test after a manual reposition started 49 m below the
+  floor with 176 deg of roll.
+- **After a hard power loss, check `dmesg` for ACR before suspecting
+  software.** The GPU can fail its secure-firmware bootstrap and CUDA reports
+  0 devices while the camera streams happily. A clean reboot fixes it.
 
 ---
 
@@ -537,14 +268,28 @@ Each of these cost real debugging time and is documented at the parameter.
 
 | setting | value | why |
 |---|---|---|
-| `time_domain` | `global` | `system` corrupts IMU timestamps: 0.63% -> 15-32% drift |
-| `mapping:=true` for map runs | `static_tsdf`, decay off | dynamic-mode decay deletes the map 27 s behind the robot |
+| `time_domain` | `global` | `system` corrupts IMU timestamps (11 ms deviation on a 4.9 ms sample): 0.63% -> 15-32% drift, invisible at rest |
+| `enable_frame_sync` | `false` | makes the IR pair wait for depth: bursty frames (190 ms gaps) and 180 ms pose age. It was set twice in one dict and the later `true` won for 17 days |
+| `enable_ir_long_exposure` / `ir_ae_max_exposure` | `false` / 20 ms | unbounded auto-exposure settled at 50 ms and capped the pair at 20 Hz; set by `camera_tuner` because launch drops the parameter silently |
+| power mode | MAXN_SUPER (`nvpmodel -m 2`) | cuVSLAM 15.3 -> 28.4 Hz; needs the `-super` flash, and `nvpmodel -q` lies after the symlink workaround |
+| `enable_laser` | `false` | the projector's dots move with the camera; it restores place recognition but not odometry |
+| `mapping:=true` for map runs | `static_tsdf`, decay off | dynamic-mode decay deletes the map 27 s (~4 m) behind the robot |
 | `map_clearing_radius_m` | 100 | default 5 m trims the map to a bubble |
-| colour resolution | 848x480 | mismatch with depth costs ~15% of depth frames |
+| colour resolution | 848x480 | mismatch with depth costs ~15% of depth frames in the software aligner |
 | `integrate_depth_rate_hz` | 10 | default 40 is faster than the camera produces frames |
-| point cloud decimation | 4x | full res starved the whole camera pipeline |
-| Nav2 velocity smoother | `[0.15, 0.15, 1.0]` | stock `y = 0.0` silently forbids strafing |
+| point cloud decimation | 4x | full res starved the whole camera pipeline (0.46 s -> 0.03 s lag) |
+| colour while navigating | off (5 fps if needed) | every colour frame costs IR bandwidth: 6.3 cm off, ~20 cm at 30 fps |
+| global costmap source | the saved 2D grid, in BOTH costmaps | an ESDF cannot say "unseen"; nvblox is not a costmap source |
+| local obstacle layer | `VoxelLayer` on the decimated depth cloud | mark, clear, leave unknown alone |
+| `dynamic_mapper` slice | 0.05-0.20 m, same as `static_mapper` | the default 0.0 fused tile reflections as walls |
+| `transform_tolerance` (both costmaps) | 1.5 s | above the 0.47 s TF lag; below it Nav2 reports "Reached the goal!" without moving |
+| `default_server_timeout` | 2000 ms | the first `follow_path` of a session is never acknowledged in 20 ms |
+| Nav2 velocity smoother | `[0.15, 0.15, 0.5]` | stock `y = 0.0` silently forbids strafing |
+| `wz_max` | 0.5 rad/s | at 1.0 the controller drove arcs and lost visual tracking |
+| `xy_goal_tolerance` / `yaw_goal_tolerance` | 0.15 m / 0.25 rad, `stateful` true | from the measured 10.9 cm rotational excursion |
+| `camera_link` | the LEFT IR lens, +0.94 deg roll | the body centre put every depth point 5 cm right of the truth |
+| cuVSLAM anchor frame | `base_footprint` | a second parent on `base_link` split the TF tree in two |
 
-**The method lesson behind most of these:** verify a change against what it was
-supposed to improve, not against health counters. `vo_state` and frame times
-report perfect health while an estimator drifts metres off course.
+**The method lesson behind most of these:** verify a change against what it
+was supposed to improve, not against health counters. `vo_state` and frame
+times report perfect health while an estimator drifts metres off course.

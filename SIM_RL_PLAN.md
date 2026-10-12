@@ -15,15 +15,16 @@ policy, as an end-to-end tutorial in this repo.
    warehouse and points its camera at a list of shelf locations without
    stopping - the industrial use case.
 
-Written 2026-09-27; decisions last updated the same day. **A new session
-should read this file first**, then `kaya_description/usd/README.md`.
+Written 2026-09-27, results recorded through 2026-09-29. **Status 2026-10-12:**
+demo 1 is complete (v2.4, 3 real goals in 4); demo 2 has not been started.
+To run or retrain anything, start with `kaya_lab/README.md`; this file is the
+plan and the record of every result.
 
 ---
 
 ## 0. Where things stand (read before touching anything)
 
-- **Branch:** `isaac-sim-usd` (8 commits on `master`; not pushed, not merged).
-  This file is not committed yet. Continue on this branch or branch from it.
+- **Branch:** everything is on `master` (merged 2026-10-12).
 - **The sim robot is done and verified.** `kaya_description/usd/kaya.usda` is
   an articulated Kaya: chassis, 3 wheels, 36 free rollers, the Gemini 335L
   with the real robot's calibration, and servo drives. Measured against the
@@ -37,8 +38,7 @@ should read this file first**, then `kaya_description/usd/README.md`.
     that Isaac Sim. RSL-RL, skrl, rl_games and SB3 are installed. Read
     Isaac Lab's own `CLAUDE.md` / `AGENTS.md`.
 - **Machine:** RTX 5090 Laptop, 24 GB.
-- **The real robot is not needed until the real-robot steps.** Pending
-  hardware items are in the project memory (`kaya-next-robot-session`).
+- **The real robot is not needed until the real-robot steps.**
 
 ### Lessons from building the sim; do not relearn them
 
@@ -616,7 +616,7 @@ cm in front of the mouth, and a penalty for the ball against a panel's outside.
 - the IMU queue keeps every sample (depth 1 lost ~65 deg in a spin, run 32);
 - "ball beyond the goal wall" is judged in the box frame (run 33).
 
-**v2.4 on the real robot (2026-09-29 ~02:15, fine-tuned from v2.3, `kaya_ball_v2/2026-09-29_00-25-07_v24/model_1097.pt`, `~/b5/node/policy_v24.npz`): 3 goals in 4.**
+**v2.4 on the real robot (2026-09-29 ~02:15, fine-tuned from v2.3, `kaya_ball_v2/2026-09-29_00-25-07_v24/model_1097.pt`, `kaya_lab/policies/policy_v24.npz`): 3 goals in 4.**
 
     run  start                              result
     35   beside the box, right              SCORED 49.7 s - pinned at the panel's corner, backed off, came round the front
@@ -705,12 +705,12 @@ Each chapter ends in a runnable command and a number to compare against.
 
 ---
 
-## 6. Where to start in the new session
+## 6. Where to start
 
-1. Read section 0, then `kaya_description/usd/README.md` and
-   `kaya_description/usd/kaya_isaac.py`.
+1. `kaya_lab/README.md` has the commands, in order, for everything in this
+   file; `kaya_lab/LEARNING_LOG.md` explains each step.
 2. Smoke tests:
    `~/isaac-sim/python.sh kaya_description/usd/kaya_sim.py --test --device cuda`
    and `cd ~/IsaacLab && ./isaaclab.sh -p scripts/environments/list_envs.py`.
-3. Start **M0**. The ball measurements are not needed until B1; M0 and M1
-   come first either way.
+3. Demo 2 (warehouse inspection) is the next unstarted piece of work; the
+   warehouse USD and the ray-cast camera pattern are named in section 3.
