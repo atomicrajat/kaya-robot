@@ -1,4 +1,21 @@
-# The learnings: an index
+# The learnings
+
+**The full narrative, in teaching order** (`docs/learnings/`, about 17,000 words):
+
+1. [The robot, and the constraint that shaped everything](docs/learnings/01-the-robot.md): the 8 GB module, frames, the omni drive, the IMU
+2. [Seeing where you are](docs/learnings/02-seeing-where-you-are.md): VIO, the regression that hid at rest, the camera pipeline as a shared resource
+3. [Maps and navigation](docs/learnings/03-maps-and-navigation.md): nvblox, the map that deleted itself, relocalisation, Nav2 for an omni robot, the guards
+4. [The dashboard, and giving places meaning](docs/learnings/04-the-dashboard-and-meaning.md): honest displays, keyframes, caption once, `here` versus `beyond`
+5. [A twin in simulation](docs/learnings/05-a-twin-in-simulation.md): CAD to USD, how the sim earned trust, Isaac Lab and PPO, the first task
+6. [The ball](docs/learnings/06-the-ball.md): designing around the camera, the detector, sim-to-real, the footballer, sixteen filmed runs
+7. [The method](docs/learnings/07-the-method.md): the sixteen habits both projects share
+
+Below is the **index**: one line per lesson pointing at the commit or section
+that holds the primary record, and the video outline.
+
+---
+
+## The index
 
 Everything this project learned is already written down, but in four places
 and in the order it happened. This file is the map: one line per lesson, in

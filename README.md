@@ -54,7 +54,7 @@ Measurements, and how each was taken: `kaya_description/cad/`.
 |---|---|
 | **build and run a Kaya** from a flashed Jetson to navigation, the dashboard and the question box | [`GETTING_STARTED.md`](GETTING_STARTED.md) |
 | **train it in Isaac Lab** and run the ball policy on the robot | [`kaya_lab/README.md`](kaya_lab/README.md) |
-| **learn what was learned**: every concept, fault, measurement and fix, in teaching order | [`LEARNINGS.md`](LEARNINGS.md) |
+| **learn what was learned**: every concept, fault, measurement and fix, in teaching order | [`LEARNINGS.md`](LEARNINGS.md), seven chapters in [`docs/learnings/`](docs/learnings/) |
 | know why a setting is what it is, and what is still open | [`ROADMAP.md`](ROADMAP.md) |
 | the RL plan with every result recorded | [`SIM_RL_PLAN.md`](SIM_RL_PLAN.md) |
 
