@@ -1,63 +1,77 @@
 #!/usr/bin/env bash
-# Save the running cuVSLAM session's map so it can be reused next time.
+# Save everything a map is, into one folder:
 #
 #   kaya_save_map ~/kaya_maps/home
 #
-# Then bring the stack up against it:
+#   ~/kaya_maps/home/cuvslam/         where the robot IS: cuVSLAM's relocalisation
+#                                     database (map_path:=... reloads it)
+#   ~/kaya_maps/home/home_2d.pgm/yaml the 2D grid Nav2 plans on (map_2d:=...)
+#   ~/kaya_maps/home/home.nvblx       what the SPACE looks like: nvblox's volume
+#                                     (nvblox_map:=... reloads it; 3.3 GB in RAM
+#                                     for 202 m^2, so navigation uses the grid)
 #
-#   ros2 launch kaya_bringup nav.launch.py map_path:=/home/orin-nano/kaya_maps/home
+# Run with the stack up in MAPPING mode (nav.launch.py mapping:=true nav2:=false)
+# after driving the whole space: a map only holds what the camera has seen.
+# Then navigate on it: kaya_bringup/tools/kaya_nav.sh home
 #
-# Why bother: without a saved map, cuVSLAM's origin is wherever the robot
-# happened to be switched on, so a goal recorded yesterday points somewhere
-# meaningless today. With one, the robot localizes back into the same
-# coordinate system -- measured recovering to within 7 mm from a pose hint
-# that was 1.8 m wrong, so it genuinely recognises the place rather than
-# trusting the hint.
+# Without a saved map cuVSLAM's origin is wherever the robot was switched on, so
+# a goal recorded yesterday points somewhere meaningless today. With one, the
+# robot localises back into the same coordinate system -- measured recovering
+# to 7 mm from a pose hint that was 1.8 m wrong, and 5.9 cm from one 5 m wrong.
 #
-# Drive the robot around the space first. The map only contains what the
-# camera has actually seen, and a map built from one viewpoint will only
-# relocalize from near that viewpoint.
+# The cuVSLAM save is the part verified on hardware many times. The 2D and
+# nvblox saves wrap the two commands GETTING_STARTED.md used to list separately;
+# each is skipped with a warning if its service or topic is absent.
 
 set -u
 
 if [ $# -lt 1 ]; then
-    echo "usage: kaya_save_map <path>" >&2
-    echo "  e.g. kaya_save_map ~/kaya_maps/home" >&2
+    echo "usage: kaya_save_map <folder>        e.g. kaya_save_map ~/kaya_maps/home" >&2
     exit 2
 fi
 
 # cuVSLAM writes the map itself and needs an absolute path -- it does not
 # expand ~ or resolve relative paths against your shell's directory.
-DEST=$(python3 -c "import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))" "$1")
-mkdir -p "$(dirname "$DEST")"
+DIR=$(python3 -c "import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))" "$1")
+NAME=$(basename "$DIR")
+mkdir -p "$DIR"
+# the diagnostic tools are not installed by colcon; find them in the source tree
+SRC=${KAYA_SRC:-$HOME/ros2_ws/src/kaya}
+RC=0
 
-# Deliberately NOT gated on `ros2 node list`. That is the ros2 CLI's graph
-# discovery, and on this machine it routinely reports "Node not found" for
-# nodes that are demonstrably running and publishing -- stale FastDDS shared
-# memory is enough to break it. Gating on it made this script refuse to save a
-# map while visual_slam was up and had just localized. So: attempt the call
-# and judge by the result, with a timeout so a genuinely absent service fails
-# fast instead of hanging.
-echo "==> saving map to ${DEST}"
+# ---- 1. cuVSLAM relocalisation map -------------------------------------------
+# Deliberately NOT gated on `ros2 node list`: that is the CLI's graph discovery,
+# which routinely reports "Node not found" for nodes that are running (stale
+# FastDDS shared memory is enough). Attempt the call and judge by the result.
+echo "==> 1/3 cuVSLAM map -> $DIR/cuvslam"
 OUT=$(timeout 120 ros2 service call /visual_slam/save_map \
-        isaac_ros_visual_slam_interfaces/srv/FilePath \
-        "{file_path: ${DEST}}" 2>&1)
-RC=$?
+        isaac_ros_visual_slam_interfaces/srv/FilePath "{file_path: $DIR/cuvslam}" 2>&1)
+case $? in
+  124) echo "    TIMED OUT on /visual_slam/save_map. Is the stack running? Large maps are slow." >&2; RC=1 ;;
+  *) if echo "$OUT" | grep -q "success=True"; then echo "    saved ($(du -sh "$DIR/cuvslam" 2>/dev/null | cut -f1))"
+     else echo "    FAILED:" >&2; echo "$OUT" | tail -3 >&2; RC=1; fi ;;
+esac
 
-if [ $RC -eq 124 ]; then
-    echo "==> TIMED OUT waiting on /visual_slam/save_map" >&2
-    echo "    Is the stack running? Large maps can also just be slow." >&2
-    exit 1
+# ---- 2. 2D occupancy grid (PGM + YAML) ----------------------------------------
+echo "==> 2/3 2D grid -> $DIR/${NAME}_2d.{pgm,yaml}"
+if [ -f "$SRC/kaya_bringup/tools/save_2d_map.py" ]; then
+    timeout 60 python3 "$SRC/kaya_bringup/tools/save_2d_map.py" \
+        /nvblox_node/static_occupancy_grid "$DIR/${NAME}_2d" || { echo "    2D save failed (is nvblox running in mapping mode?)" >&2; RC=1; }
+else
+    echo "    skipped: $SRC/kaya_bringup/tools/save_2d_map.py not found (set KAYA_SRC)" >&2
 fi
 
-if echo "$OUT" | grep -q "success=True"; then
-    SIZE=$(du -sh "$DEST" 2>/dev/null | cut -f1)
-    echo "==> saved (${SIZE:-unknown size})"
-    echo "    reuse it with:"
-    echo "      ros2 launch kaya_bringup nav.launch.py map_path:=${DEST}"
-    exit 0
-fi
+# ---- 3. nvblox volume ---------------------------------------------------------
+echo "==> 3/3 nvblox volume -> $DIR/$NAME.nvblx"
+OUT=$(timeout 180 ros2 service call /nvblox_node/save_map nvblox_msgs/srv/FilePath \
+        "{file_path: $DIR/$NAME.nvblx}" 2>&1)
+if echo "$OUT" | grep -q "success=True"; then echo "    saved ($(du -sh "$DIR/$NAME.nvblx" 2>/dev/null | cut -f1))"
+else echo "    skipped or failed (nvblox not running, or not in mapping mode):" >&2; echo "$OUT" | tail -2 >&2; fi
 
-echo "==> SAVE FAILED" >&2
-echo "$OUT" | tail -5 >&2
-exit 1
+echo
+if [ $RC -eq 0 ]; then
+    echo "==> map '$NAME' saved in $DIR. Navigate on it with:"
+    echo "      $SRC/kaya_bringup/tools/kaya_nav.sh $NAME              # anchored at the mark"
+    echo "      $SRC/kaya_bringup/tools/kaya_nav.sh $NAME --relocalise # localise into the saved map"
+fi
+exit $RC
