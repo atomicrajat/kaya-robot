@@ -18,6 +18,24 @@ that were verified on hardware, not targets.
 | RL in Isaac Lab: drive to a point | 100% success in 3 minutes of training |
 | RL: find, dribble and score a ball | sim 99.9%; **real robot 3 goals in 4**, from beside the box, from behind, and out of a corner |
 
+## See it
+
+| | |
+|---|---|
+| ![Kaya in Isaac Sim](docs/images/isaac_sim_kaya_render.jpg) | ![driving the sim robot](docs/images/isaac_sim_teleop.gif) |
+| **The calibrated twin in Isaac Sim 6.0.** Chassis, three wheels, 36 free rollers, servo drives and the Gemini 335L, every number measured on the real robot (`kaya_description/usd/`). | **Driving it** with W/A/S/D/Q/E through the same servo model the training uses. |
+| ![4096 Kayas learning to drive to a point](docs/images/isaac_lab_move_to_target_learned.gif) | ![the learned ball policy](docs/images/isaac_lab_goal_kick_learned.gif) |
+| **Isaac Lab, task 1:** drive to the orange point and stop. Thousands of robots train at once; 100% success after three minutes. | **Task 2, the learned policy:** find the yellow ball, get behind it, dribble it into the box. The policy never sees an image; it sees what a detector would report. |
+| ![the footballer arena](docs/images/isaac_lab_football_arena_learned.gif) | ![the real robot scores](docs/images/real_goal_run24.jpg) |
+| **v2, "play like a footballer":** rooms with walls, corners and obstacles, because a ball in a corner was unrecoverable on the real floor. | **The real robot, run 24:** out from behind the side panel, round the front, and in. v2.4 scored 3 of 4 from the hardest starts. |
+
+![the map with the remembered places](docs/images/map_home_final_keyframes.png)
+
+**The flat as the robot knows it.** The 202 m² grid nvblox built, the 62 places the
+robot remembered as it drove (blue), and where "where can I eat / cook / wash /
+sleep / find the 3D printer" were answered (red). The white rays outside the walls
+are what the depth camera saw through windows and doorways.
+
 ## Hardware
 
 | part | this build |
