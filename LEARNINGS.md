@@ -1,6 +1,6 @@
 # The learnings
 
-**The full narrative, in teaching order** (`docs/learnings/`, about 17,000 words):
+**The full narrative, in teaching order** (`docs/learnings/`, about 15,000 words):
 
 1. [The robot, and the constraint that shaped everything](docs/learnings/01-the-robot.md): the 8 GB module, frames, the omni drive, the IMU
 2. [Seeing where you are](docs/learnings/02-seeing-where-you-are.md): VIO, the regression that hid at rest, the camera pipeline as a shared resource
