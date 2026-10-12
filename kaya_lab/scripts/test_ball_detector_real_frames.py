@@ -4,6 +4,7 @@ the fit residual is small, and the positions agree with the placements
 (0.5 m away; 10 cm gap; touching: centred, at each front wheel)."""
 import sys
 from pathlib import Path
+import pathlib
 import cv2
 import numpy as np
 HERE = Path(__file__).resolve().parents[1]
@@ -18,7 +19,10 @@ variants = {
     "documented pose, no distortion": BallDetector(K, None, T_doc, 0.070, 0.070 - 0.037),
     "robot TF + real distortion": BallDetector(cal.K, cal.D, cal.T_base_optical(), 0.070, 0.070 - 0.037),
 }
-d = HERE / "data" / "ball_frames_20260927"
+# The real frames are camera images of a home and are kept OUTSIDE the public repo
+# (KAYA_PRIVATE_MEDIA, default ../private_media beside the repo), see kaya_lab/data/README.md.
+import os
+d = pathlib.Path(os.environ.get("KAYA_PRIVATE_MEDIA", HERE.parent.parent / "private_media")) / "kaya_lab" / "data" / "ball_frames_20260927"
 for f, note in [("ball_0p5m.png", "~0.5 m ahead"), ("ball_10cm_gap.png", "10 cm gap"),
                 ("ball_touch_centre.png", "touching, centred (sim contact x 15.3)"),
                 ("ball_touch_wheel_a.png", "touching + wheel"), ("ball_touch_wheel_b.png", "touching + other wheel")]:

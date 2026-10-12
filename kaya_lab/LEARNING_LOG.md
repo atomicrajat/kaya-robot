@@ -48,7 +48,7 @@ the colour silhouette. This shapes what the sim detector must imitate.
 ~12 cm wide that holds the ball. The simulation must keep ball-wheel contact,
 or it trains on a different robot.
 
-Data and scripts: `kaya_lab/data/ball_frames_20260927/`.
+Scripts: `kaya_lab/data/ball_frames_20260927/`. The frames themselves are camera images of a home and are not in the public repo (see `kaya_lab/data/README.md`).
 
 ---
 

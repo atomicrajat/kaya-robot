@@ -26,8 +26,8 @@ that were verified on hardware, not targets.
 | **The calibrated twin in Isaac Sim 6.0.** Chassis, three wheels, 36 free rollers, servo drives and the Gemini 335L, every number measured on the real robot (`kaya_description/usd/`). | **Driving it** with W/A/S/D/Q/E through the same servo model the training uses. |
 | ![4096 Kayas learning to drive to a point](docs/images/isaac_lab_move_to_target_learned.gif) | ![the learned ball policy](docs/images/isaac_lab_goal_kick_learned.gif) |
 | **Isaac Lab, task 1:** drive to the orange point and stop. Thousands of robots train at once; 100% success after three minutes. | **Task 2, the learned policy:** find the yellow ball, get behind it, dribble it into the box. The policy never sees an image; it sees what a detector would report. |
-| ![the footballer arena](docs/images/isaac_lab_football_arena_learned.gif) | ![the real robot scores](docs/images/real_goal_run24.jpg) |
-| **v2, "play like a footballer":** rooms with walls, corners and obstacles, because a ball in a corner was unrecoverable on the real floor. | **The real robot, run 24:** out from behind the side panel, round the front, and in. v2.4 scored 3 of 4 from the hardest starts. |
+| ![the footballer arena](docs/images/isaac_lab_football_arena_learned.gif) | |
+| **v2, "play like a footballer":** rooms with walls, corners and obstacles, because a ball in a corner was unrecoverable on the real floor. On the real robot v2.4 scored 3 of 4 from the hardest starts; the run videos are linked from the project's channel, not stored here. | |
 
 ![the map with the remembered places](docs/images/map_home_final_keyframes.png)
 
