@@ -90,7 +90,10 @@ except ImportError:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # The saved map lives outside the repo -- it is 719 MB of map store, not source.
-BASE_MAP = os.path.join(WORKSPACE, 'robot_maps', 'home_final', 'home_2d')
+# KAYA_BASE_MAP: the 2D grid's path stem (the .pgm/.yaml pair without the extension),
+# as written by kaya_save_map. Default: the project's own map in the workspace folder.
+BASE_MAP = os.environ.get('KAYA_BASE_MAP',
+                          os.path.join(WORKSPACE, 'robot_maps', 'home_final', 'home_2d'))
 PORT = int(os.environ.get('KAYA_DASH_PORT', '8080'))
 # Beyond this the robot is treated as gone, not merely quiet.
 STALE_S = 5.0

@@ -155,7 +155,7 @@ def generate_launch_description():
                               description='Serve the stack to Foxglove Studio over the LAN, for '
                                           'a live map and robot position without an X session on '
                                           'the robot. Connect the desktop app to '
-                                          'ws://192.168.1.28:8765. Off by default until the cost '
+                                          'ws://<robot-ip>:8765. Off by default until the cost '
                                           'to VIO of a subscribed client is measured on a driven '
                                           'loop -- see the note at the node.'),
         DeclareLaunchArgument('foxglove_port', default_value='8765'),

@@ -4,3 +4,12 @@ build/
 install/
 log/
 kaya_description/usd/test_output/
+# built on the robot, machine-specific
+*.engine
+# training checkpoints live in ~/IsaacLab/logs; only exported .npz policies are tracked
+*.pt
+*.onnx
+# probe snapshots and runtime state
+probe_*.png
+.pgid
+*.pgid
